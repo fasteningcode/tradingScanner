@@ -6,3 +6,19 @@ WTForms==3.1.1
 python-dotenv==1.0.0
 email-validator==2.1.0
 Werkzeug==3.0.1
+
+# Kite Connect API Integration
+kiteconnect==5.0.1
+
+# Database Migrations
+Flask-Migrate==4.0.5
+
+# Background Task Scheduling
+APScheduler==3.10.4
+
+# Data Analysis (compatible with Python 3.13)
+pandas>=2.2.0
+numpy>=1.26.0
+
+# WebSocket for real-time data
+websocket-client==1.6.4

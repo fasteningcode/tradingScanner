@@ -12,8 +12,77 @@
     </div>
 </div>
 
+<!-- Kite Connect Status Banner -->
+{% if current_user.kite_connected and current_user.is_kite_token_valid() %}
+<div class="alert alert-success alert-dismissible fade show mb-4" role="alert">
+    <div class="d-flex align-items-center">
+        <i class="bi bi-check-circle-fill fs-4 me-3"></i>
+        <div class="flex-grow-1">
+            <strong>Kite Connect Active</strong>
+            <div class="small">Connected as: {{ current_user.kite_user_id }}</div>
+        </div>
+        <form method="POST" action="{{ url_for('kite.disconnect') }}" class="d-inline">
+            <button type="submit" class="btn btn-sm btn-outline-success" onclick="return confirm('Are you sure you want to disconnect from Kite?');">
+                <i class="bi bi-plug"></i> Disconnect
+            </button>
+        </form>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% elif current_user.kite_connected and not current_user.is_kite_token_valid() %}
+<div class="alert alert-warning alert-dismissible fade show mb-4" role="alert">
+    <div class="d-flex align-items-center">
+        <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
+        <div class="flex-grow-1">
+            <strong>Kite Token Expired</strong>
+            <div class="small">Your Kite access token has expired. Please reconnect to continue trading.</div>
+        </div>
+        <a href="{{ url_for('kite.connect') }}" class="btn btn-sm btn-warning">
+            <i class="bi bi-arrow-clockwise"></i> Reconnect
+        </a>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% else %}
+<div class="alert alert-info alert-dismissible fade show mb-4" role="alert">
+    <div class="d-flex align-items-center">
+        <i class="bi bi-info-circle-fill fs-4 me-3"></i>
+        <div class="flex-grow-1">
+            <strong>Connect to Zerodha Kite</strong>
+            <div class="small">Connect your Zerodha account to start scanning stocks and placing orders.</div>
+        </div>
+        <a href="{{ url_for('kite.connect') }}" class="btn btn-sm btn-primary">
+            <i class="bi bi-link-45deg"></i> Connect Now
+        </a>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
 <!-- Statistics Cards -->
 <div class="row g-4 mb-4">
+    <div class="col-md-6 col-lg-3">
+        <div class="card stat-card {% if current_user.kite_connected %}bg-success{% else %}bg-secondary{% endif %} text-white shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2 text-white-50">Kite Status</h6>
+                        <h2 class="card-title mb-0 small">
+                            {% if current_user.kite_connected %}
+                                Connected
+                            {% else %}
+                                Not Connected
+                            {% endif %}
+                        </h2>
+                    </div>
+                    <div class="stat-icon">
+                        <i class="bi bi-link-45deg fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="col-md-6 col-lg-3">
         <div class="card stat-card bg-primary text-white shadow-sm">
             <div class="card-body">
@@ -24,22 +93,6 @@
                     </div>
                     <div class="stat-icon">
                         <i class="bi bi-people fs-1"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-md-6 col-lg-3">
-        <div class="card stat-card bg-success text-white shadow-sm">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-subtitle mb-2 text-white-50">Account Status</h6>
-                        <h2 class="card-title mb-0">{{ stats.account_status }}</h2>
-                    </div>
-                    <div class="stat-icon">
-                        <i class="bi bi-check-circle fs-1"></i>
                     </div>
                 </div>
             </div>
@@ -67,11 +120,11 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="card-subtitle mb-2 text-white-50">User Level</h6>
-                        <h2 class="card-title mb-0">Member</h2>
+                        <h6 class="card-subtitle mb-2 text-white-50">Account Status</h6>
+                        <h2 class="card-title mb-0">{{ stats.account_status }}</h2>
                     </div>
                     <div class="stat-icon">
-                        <i class="bi bi-award fs-1"></i>
+                        <i class="bi bi-check-circle fs-1"></i>
                     </div>
                 </div>
             </div>
