@@ -1,4 +1,5 @@
 from flask_wtf import FlaskForm
+from flask_wtf.file import FileField, FileRequired, FileAllowed
 from wtforms import StringField, PasswordField, BooleanField, SubmitField
 from wtforms.validators import DataRequired, Email, EqualTo, Length, ValidationError
 from app.models import User
@@ -67,3 +68,16 @@ class ChangePasswordForm(FlaskForm):
         EqualTo('new_password', message='Passwords must match')
     ])
     submit = SubmitField('Change Password')
+
+
+class RestoreDatabaseForm(FlaskForm):
+    """Form for restoring database from backup"""
+
+    database_file = FileField('Database File', validators=[
+        FileRequired(message='Please select a database file'),
+        FileAllowed(['db', 'sqlite', 'sqlite3'], 'Only .db, .sqlite, or .sqlite3 files are allowed')
+    ])
+    password = PasswordField('Confirm Password', validators=[
+        DataRequired(message='Password is required to restore database')
+    ])
+    submit = SubmitField('Restore Database')

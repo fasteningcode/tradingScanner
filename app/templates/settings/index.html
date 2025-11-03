@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="h2 mb-4">
+            <i class="bi bi-gear text-primary"></i> Settings
+        </h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <!-- Tabs Navigation -->
+                <ul class="nav nav-tabs" id="settingsTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link {{ 'active' if active_tab == 'general' else '' }}"
+                                id="general-tab"
+                                data-bs-toggle="tab"
+                                data-bs-target="#general"
+                                type="button"
+                                role="tab">
+                            <i class="bi bi-sliders me-2"></i>General
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link {{ 'active' if active_tab == 'backup' else '' }}"
+                                id="backup-tab"
+                                data-bs-toggle="tab"
+                                data-bs-target="#backup"
+                                type="button"
+                                role="tab">
+                            <i class="bi bi-database me-2"></i>Backup & Restore
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link {{ 'active' if active_tab == 'security' else '' }}"
+                                id="security-tab"
+                                data-bs-toggle="tab"
+                                data-bs-target="#security"
+                                type="button"
+                                role="tab">
+                            <i class="bi bi-shield-check me-2"></i>Security
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link {{ 'active' if active_tab == 'about' else '' }}"
+                                id="about-tab"
+                                data-bs-toggle="tab"
+                                data-bs-target="#about"
+                                type="button"
+                                role="tab">
+                            <i class="bi bi-info-circle me-2"></i>About
+                        </button>
+                    </li>
+                </ul>
+
+                <!-- Tabs Content -->
+                <div class="tab-content mt-4" id="settingsTabContent">
+                    <!-- General Tab -->
+                    <div class="tab-pane fade {{ 'show active' if active_tab == 'general' else '' }}"
+                         id="general"
+                         role="tabpanel">
+                        <h4 class="mb-3">General Settings</h4>
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            General application preferences and user settings will appear here.
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Application Theme</label>
+                            <select class="form-select" disabled>
+                                <option>Light (Default)</option>
+                                <option>Dark</option>
+                                <option>Auto</option>
+                            </select>
+                            <small class="text-muted">Theme customization coming soon.</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Language</label>
+                            <select class="form-select" disabled>
+                                <option>English (Default)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Backup & Restore Tab -->
+                    <div class="tab-pane fade {{ 'show active' if active_tab == 'backup' else '' }}"
+                         id="backup"
+                         role="tabpanel">
+                        <h4 class="mb-3">Database Backup & Restore</h4>
+
+                        <!-- Backup Section -->
+                        <div class="card mb-4">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="card-title mb-0">
+                                    <i class="bi bi-download me-2"></i>Backup Database
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <p class="card-text">
+                                    Download a complete backup of your application database. This includes all user accounts,
+                                    settings, and data.
+                                </p>
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle me-2"></i>
+                                    <strong>Important:</strong> Store your backup files in a secure location.
+                                    Backup files contain sensitive user information.
+                                </div>
+                                <form method="POST" action="{{ url_for('settings.backup_database') }}">
+                                    <button type="submit" class="btn btn-success">
+                                        <i class="bi bi-download me-2"></i>Download Backup
+                                    </button>
+                                </form>
+                                <small class="text-muted mt-2 d-block">
+                                    Backup filename format: backup_YYYYMMDD_HHMMSS.db
+                                </small>
+                            </div>
+                        </div>
+
+                        <!-- Restore Section -->
+                        <div class="card">
+                            <div class="card-header bg-danger text-white">
+                                <h5 class="card-title mb-0">
+                                    <i class="bi bi-upload me-2"></i>Restore Database
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <p class="card-text">
+                                    Restore your database from a previous backup file. This will replace all current data.
+                                </p>
+                                <div class="alert alert-danger">
+                                    <i class="bi bi-exclamation-octagon me-2"></i>
+                                    <strong>Warning:</strong> Restoring a database will:
+                                    <ul class="mb-0 mt-2">
+                                        <li>Replace ALL current data with the backup data</li>
+                                        <li>Automatically create a backup of your current database first</li>
+                                        <li>Require you to log in again after restore</li>
+                                        <li>Cannot be undone (except by restoring another backup)</li>
+                                    </ul>
+                                </div>
+
+                                <form method="POST"
+                                      action="{{ url_for('settings.restore_database') }}"
+                                      enctype="multipart/form-data"
+                                      onsubmit="return confirm('Are you sure you want to restore the database? This will replace all current data. A backup of your current database will be created first.');">
+                                    {{ form.hidden_tag() }}
+
+                                    <div class="mb-3">
+                                        {{ form.database_file.label(class="form-label") }}
+                                        {{ form.database_file(class="form-control" + (" is-invalid" if form.database_file.errors else "")) }}
+                                        {% if form.database_file.errors %}
+                                            <div class="invalid-feedback">
+                                                {% for error in form.database_file.errors %}
+                                                    {{ error }}
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
+                                        <small class="form-text text-muted">
+                                            Select a .db, .sqlite, or .sqlite3 file to restore
+                                        </small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        {{ form.password.label(class="form-label") }}
+                                        {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else ""), placeholder="Enter your password to confirm") }}
+                                        {% if form.password.errors %}
+                                            <div class="invalid-feedback">
+                                                {% for error in form.password.errors %}
+                                                    {{ error }}
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
+                                        <small class="form-text text-muted">
+                                            Your password is required to authorize this operation
+                                        </small>
+                                    </div>
+
+                                    {{ form.submit(class="btn btn-danger") }}
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Security Tab -->
+                    <div class="tab-pane fade {{ 'show active' if active_tab == 'security' else '' }}"
+                         id="security"
+                         role="tabpanel">
+                        <h4 class="mb-3">Security Settings</h4>
+
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="bi bi-shield-lock text-primary me-2"></i>Password
+                                </h5>
+                                <p class="card-text">Manage your account password and security settings.</p>
+                                <a href="{{ url_for('auth.change_password') }}" class="btn btn-outline-primary">
+                                    <i class="bi bi-key me-2"></i>Change Password
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="bi bi-clock-history text-info me-2"></i>Session Information
+                                </h5>
+                                <table class="table table-sm">
+                                    <tr>
+                                        <td class="fw-bold" style="width: 200px;">Last Login:</td>
+                                        <td>{{ current_user.last_login.strftime('%B %d, %Y at %I:%M %p') if current_user.last_login else 'First time login' }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">Account Created:</td>
+                                        <td>{{ current_user.created_at.strftime('%B %d, %Y at %I:%M %p') }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">Account Status:</td>
+                                        <td>
+                                            <span class="badge bg-success">Active</span>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Security Tips:</strong>
+                            <ul class="mb-0 mt-2">
+                                <li>Use a strong, unique password</li>
+                                <li>Change your password regularly</li>
+                                <li>Enable two-factor authentication (coming soon)</li>
+                                <li>Review login activity regularly</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- About Tab -->
+                    <div class="tab-pane fade {{ 'show active' if active_tab == 'about' else '' }}"
+                         id="about"
+                         role="tabpanel">
+                        <h4 class="mb-3">About This Application</h4>
+
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="bi bi-info-square text-primary me-2"></i>Application Information
+                                </h5>
+                                <table class="table table-sm">
+                                    <tr>
+                                        <td class="fw-bold" style="width: 200px;">Version:</td>
+                                        <td>{{ app_info.version }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">Database:</td>
+                                        <td>{{ app_info.database }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">Total Users:</td>
+                                        <td>{{ app_info.users_count }}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="bi bi-code-square text-success me-2"></i>Technologies
+                                </h5>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <ul class="list-unstyled">
+                                            <li><i class="bi bi-check-circle text-success me-2"></i>Flask 3.0</li>
+                                            <li><i class="bi bi-check-circle text-success me-2"></i>SQLAlchemy</li>
+                                            <li><i class="bi bi-check-circle text-success me-2"></i>Flask-Login</li>
+                                            <li><i class="bi bi-check-circle text-success me-2"></i>Flask-WTF</li>
+                                        </ul>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <ul class="list-unstyled">
+                                            <li><i class="bi bi-check-circle text-success me-2"></i>Bootstrap 5</li>
+                                            <li><i class="bi bi-check-circle text-success me-2"></i>Bootstrap Icons</li>
+                                            <li><i class="bi bi-check-circle text-success me-2"></i>Python 3.13</li>
+                                            <li><i class="bi bi-check-circle text-success me-2"></i>SQLite</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-center mt-4">
+                            <p class="text-muted">
+                                Built with Flask & Bootstrap 5<br>
+                                <small>🤖 Generated with Claude Code</small>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

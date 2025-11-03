@@ -35,9 +35,11 @@ def create_app(config_name='default'):
     # Register blueprints
     from app.auth import auth_bp
     from app.dashboard import dashboard_bp
+    from app.settings import settings_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
+    app.register_blueprint(settings_bp)
 
     # Create database tables
     with app.app_context():
