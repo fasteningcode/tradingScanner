@@ -70,6 +70,11 @@ class ChangePasswordForm(FlaskForm):
     submit = SubmitField('Change Password')
 
 
+class BackupForm(FlaskForm):
+    """Form for database backup with CSRF protection"""
+    submit = SubmitField('Download Backup')
+
+
 class RestoreDatabaseForm(FlaskForm):
     """Form for restoring database from backup"""
 
@@ -81,3 +86,16 @@ class RestoreDatabaseForm(FlaskForm):
         DataRequired(message='Password is required to restore database')
     ])
     submit = SubmitField('Restore Database')
+
+
+class EmergencyRestoreForm(FlaskForm):
+    """Form for emergency database restore with emergency password"""
+
+    database_file = FileField('Database File', validators=[
+        FileRequired(message='Please select a database file'),
+        FileAllowed(['db', 'sqlite', 'sqlite3'], 'Only .db, .sqlite, or .sqlite3 files are allowed')
+    ])
+    emergency_password = PasswordField('Emergency Restore Password', validators=[
+        DataRequired(message='Emergency restore password is required')
+    ])
+    submit = SubmitField('Emergency Restore Database')

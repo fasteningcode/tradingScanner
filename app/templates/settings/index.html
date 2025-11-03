@@ -111,9 +111,8 @@
                                     Backup files contain sensitive user information.
                                 </div>
                                 <form method="POST" action="{{ url_for('settings.backup_database') }}">
-                                    <button type="submit" class="btn btn-success">
-                                        <i class="bi bi-download me-2"></i>Download Backup
-                                    </button>
+                                    {{ backup_form.hidden_tag() }}
+                                    {{ backup_form.submit(class="btn btn-success") }}
                                 </form>
                                 <small class="text-muted mt-2 d-block">
                                     Backup filename format: backup_YYYYMMDD_HHMMSS.db
@@ -147,14 +146,14 @@
                                       action="{{ url_for('settings.restore_database') }}"
                                       enctype="multipart/form-data"
                                       onsubmit="return confirm('Are you sure you want to restore the database? This will replace all current data. A backup of your current database will be created first.');">
-                                    {{ form.hidden_tag() }}
+                                    {{ restore_form.hidden_tag() }}
 
                                     <div class="mb-3">
-                                        {{ form.database_file.label(class="form-label") }}
-                                        {{ form.database_file(class="form-control" + (" is-invalid" if form.database_file.errors else "")) }}
-                                        {% if form.database_file.errors %}
+                                        {{ restore_form.database_file.label(class="form-label") }}
+                                        {{ restore_form.database_file(class="form-control" + (" is-invalid" if restore_form.database_file.errors else "")) }}
+                                        {% if restore_form.database_file.errors %}
                                             <div class="invalid-feedback">
-                                                {% for error in form.database_file.errors %}
+                                                {% for error in restore_form.database_file.errors %}
                                                     {{ error }}
                                                 {% endfor %}
                                             </div>
@@ -165,11 +164,11 @@
                                     </div>
 
                                     <div class="mb-3">
-                                        {{ form.password.label(class="form-label") }}
-                                        {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else ""), placeholder="Enter your password to confirm") }}
-                                        {% if form.password.errors %}
+                                        {{ restore_form.password.label(class="form-label") }}
+                                        {{ restore_form.password(class="form-control" + (" is-invalid" if restore_form.password.errors else ""), placeholder="Enter your password to confirm") }}
+                                        {% if restore_form.password.errors %}
                                             <div class="invalid-feedback">
-                                                {% for error in form.password.errors %}
+                                                {% for error in restore_form.password.errors %}
                                                     {{ error }}
                                                 {% endfor %}
                                             </div>
@@ -179,7 +178,7 @@
                                         </small>
                                     </div>
 
-                                    {{ form.submit(class="btn btn-danger") }}
+                                    {{ restore_form.submit(class="btn btn-danger") }}
                                 </form>
                             </div>
                         </div>

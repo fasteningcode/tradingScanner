@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emergency Database Restore</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .emergency-container {
+            max-width: 600px;
+            width: 100%;
+        }
+        .emergency-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        .emergency-header {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 15px 15px 0 0;
+            text-align: center;
+        }
+        .emergency-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        .emergency-body {
+            padding: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="emergency-container">
+        <div class="emergency-card">
+            <div class="emergency-header">
+                <i class="bi bi-exclamation-triangle-fill emergency-icon"></i>
+                <h1 class="h3 mb-0">Emergency Database Restore</h1>
+            </div>
+            <div class="emergency-body">
+                <!-- Flash Messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-octagon me-2"></i>
+                    <strong>CRITICAL WARNING:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li>This will <strong>REPLACE ALL DATA</strong> in the database</li>
+                        <li>A backup will be created automatically</li>
+                        <li>All users will need to log in again</li>
+                        <li>This action requires the emergency restore password</li>
+                        <li><strong>Rate limited:</strong> Maximum 5 attempts per hour</li>
+                    </ul>
+                </div>
+
+                <div class="card mb-3 border-warning">
+                    <div class="card-body">
+                        <h5 class="card-title text-warning">
+                            <i class="bi bi-info-circle me-2"></i>When to Use Emergency Restore
+                        </h5>
+                        <ul class="mb-0">
+                            <li>All user accounts are locked out</li>
+                            <li>Passwords have been forgotten</li>
+                            <li>Database corruption occurred</li>
+                            <li>Need to revert to a known good state</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <form method="POST" enctype="multipart/form-data"
+                      onsubmit="return confirm('⚠️ FINAL WARNING ⚠️\n\nThis will REPLACE the entire database!\n\nAre you absolutely sure you want to continue?');">
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        {{ form.database_file.label(class="form-label fw-bold") }}
+                        {{ form.database_file(class="form-control" + (" is-invalid" if form.database_file.errors else "")) }}
+                        {% if form.database_file.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.database_file.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">
+                            Select a valid .db, .sqlite, or .sqlite3 backup file
+                        </small>
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.emergency_password.label(class="form-label fw-bold") }}
+                        {{ form.emergency_password(class="form-control" + (" is-invalid" if form.emergency_password.errors else ""), placeholder="Enter emergency restore password") }}
+                        {% if form.emergency_password.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.emergency_password.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">
+                            This password is set in the .env file (EMERGENCY_RESTORE_PASSWORD)
+                        </small>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        {{ form.submit(class="btn btn-danger btn-lg") }}
+                        <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left me-2"></i>Cancel and Return to Login
+                        </a>
+                    </div>
+                </form>
+
+                <div class="mt-4 pt-3 border-top">
+                    <small class="text-muted">
+                        <i class="bi bi-shield-lock me-1"></i>
+                        This endpoint is protected by rate limiting and logging.
+                        All emergency restore attempts are logged for security auditing.
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mt-3">
+            <small class="text-white">
+                Emergency Restore URL: <code>/settings/emergency-restore</code>
+            </small>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
