@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h2">
+                <i class="bi bi-speedometer2 text-primary"></i> Dashboard
+            </h1>
+            <p class="text-muted mb-0">Welcome back, <strong>{{ current_user.username }}</strong>!</p>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-md-6 col-lg-3">
+        <div class="card stat-card bg-primary text-white shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2 text-white-50">Total Users</h6>
+                        <h2 class="card-title mb-0">{{ stats.total_users }}</h2>
+                    </div>
+                    <div class="stat-icon">
+                        <i class="bi bi-people fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <div class="card stat-card bg-success text-white shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2 text-white-50">Account Status</h6>
+                        <h2 class="card-title mb-0">{{ stats.account_status }}</h2>
+                    </div>
+                    <div class="stat-icon">
+                        <i class="bi bi-check-circle fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <div class="card stat-card bg-warning text-white shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2 text-white-50">Days Member</h6>
+                        <h2 class="card-title mb-0">{{ stats.days_member }}</h2>
+                    </div>
+                    <div class="stat-icon">
+                        <i class="bi bi-calendar-check fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <div class="card stat-card bg-info text-white shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2 text-white-50">User Level</h6>
+                        <h2 class="card-title mb-0">Member</h2>
+                    </div>
+                    <div class="stat-icon">
+                        <i class="bi bi-award fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- User Information -->
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-info-circle text-primary"></i> Account Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-borderless">
+                        <tbody>
+                            <tr>
+                                <td class="fw-bold" style="width: 200px;">
+                                    <i class="bi bi-person text-primary me-2"></i>Username:
+                                </td>
+                                <td>{{ current_user.username }}</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">
+                                    <i class="bi bi-envelope text-primary me-2"></i>Email:
+                                </td>
+                                <td>{{ current_user.email }}</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">
+                                    <i class="bi bi-calendar-event text-primary me-2"></i>Member Since:
+                                </td>
+                                <td>{{ current_user.created_at.strftime('%B %d, %Y') }}</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">
+                                    <i class="bi bi-clock-history text-primary me-2"></i>Last Login:
+                                </td>
+                                <td>{{ stats.last_login }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-lightning text-warning"></i> Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('dashboard.profile') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-person-gear me-2"></i>Edit Profile
+                    </a>
+                    <button class="btn btn-outline-secondary" type="button">
+                        <i class="bi bi-gear me-2"></i>Settings
+                    </button>
+                    <button class="btn btn-outline-info" type="button">
+                        <i class="bi bi-question-circle me-2"></i>Help & Support
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mt-4">
+            <div class="card-header bg-white">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-bell text-danger"></i> Notifications
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-0">
+                    <i class="bi bi-check-circle text-success me-2"></i>
+                    No new notifications
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
