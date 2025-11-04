@@ -52,24 +52,8 @@ class HistoricalDataDownloader:
         if self.task.status not in ['pending', 'paused']:
             raise ValueError(f"Task {self.task_id} is already {self.task.status}")
 
-        # Load user
-        self.user = User.query.get(self.task.user_id)
-        if not self.user or not self.user.kite_access_token:
-            self.task.status = 'failed'
-            self.task.error_message = 'User not found or Kite access token not available'
-            db.session.commit()
-            raise ValueError(self.task.error_message)
-
-        # Initialize Kite client
-        try:
-            self.kite = get_kite_client(access_token=self.user.kite_access_token)
-        except Exception as e:
-            self.task.status = 'failed'
-            self.task.error_message = f'Failed to initialize Kite client: {str(e)}'
-            db.session.commit()
-            raise
-
         # Start download in background thread
+        # Kite client will be initialized within the background thread's app context
         thread = threading.Thread(target=self._download_worker, daemon=True)
         active_downloads[self.task_id] = self
         thread.start()
@@ -97,6 +81,23 @@ class HistoricalDataDownloader:
         # Run within Flask app context
         with self.app.app_context():
             try:
+                # Re-initialize Kite client within Flask app context
+                # This ensures the client works correctly in the background thread
+                self.user = User.query.get(self.task.user_id)
+                if not self.user or not self.user.kite_access_token:
+                    self.task.status = 'failed'
+                    self.task.error_message = 'User not found or Kite access token not available'
+                    db.session.commit()
+                    return
+
+                try:
+                    self.kite = get_kite_client(access_token=self.user.kite_access_token)
+                except Exception as e:
+                    self.task.status = 'failed'
+                    self.task.error_message = f'Failed to initialize Kite client: {str(e)}'
+                    db.session.commit()
+                    return
+
                 # Update task status to running
                 self.task.status = 'running'
                 if not self.task.started_at:
