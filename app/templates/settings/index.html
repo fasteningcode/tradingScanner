@@ -1101,14 +1101,14 @@
             // Show appropriate buttons based on status
             if (task.status === 'running') {
                 pauseBtn.style.display = 'inline';
-                pauseBtn.action = `{{ url_for('settings.pause_download', task_id=0) }}`.replace('0', task.id);
+                pauseBtn.setAttribute('action', `{{ url_for('settings.pause_download', task_id=0) }}`.replace('0', task.id));
                 cancelBtn.style.display = 'inline';
-                cancelBtn.action = `{{ url_for('settings.cancel_download', task_id=0) }}`.replace('0', task.id);
+                cancelBtn.setAttribute('action', `{{ url_for('settings.cancel_download', task_id=0) }}`.replace('0', task.id));
             } else if (task.status === 'paused') {
                 resumeBtn.style.display = 'inline';
-                resumeBtn.action = `{{ url_for('settings.resume_download', task_id=0) }}`.replace('0', task.id);
+                resumeBtn.setAttribute('action', `{{ url_for('settings.resume_download', task_id=0) }}`.replace('0', task.id));
                 cancelBtn.style.display = 'inline';
-                cancelBtn.action = `{{ url_for('settings.cancel_download', task_id=0) }}`.replace('0', task.id);
+                cancelBtn.setAttribute('action', `{{ url_for('settings.cancel_download', task_id=0) }}`.replace('0', task.id));
             } else {
                 // Show start button for completed, failed, cancelled, or no task
                 startBtn.style.display = 'inline';
