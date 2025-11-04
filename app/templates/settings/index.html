@@ -522,8 +522,114 @@
                             </div>
                         </form>
 
+                        <!-- Download Control Panel -->
+                        <div class="card mt-4" id="downloadControlPanel">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="bi bi-download me-2"></i>Download Historical Data
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <!-- Download Status -->
+                                <div id="downloadStatusContainer">
+                                    <div class="alert alert-info" id="idleStatus">
+                                        <i class="bi bi-info-circle me-2"></i>
+                                        Click "Start Download" to begin downloading historical data for all NIFTY 500 stocks.
+                                    </div>
+
+                                    <!-- Active Download Progress -->
+                                    <div id="activeDownloadStatus" style="display: none;">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <div>
+                                                <span class="badge" id="downloadStatusBadge">Running</span>
+                                                <span id="currentStockName" class="ms-2 text-muted"></span>
+                                            </div>
+                                            <div>
+                                                <span id="downloadProgressText">0 / 0 stocks</span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Progress Bar -->
+                                        <div class="progress mb-3" style="height: 25px;">
+                                            <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                                 id="downloadProgressBar"
+                                                 role="progressbar"
+                                                 style="width: 0%;">
+                                                <span id="progressPercentage">0%</span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Statistics Row -->
+                                        <div class="row g-2 mb-3">
+                                            <div class="col-md-3">
+                                                <div class="p-2 bg-light rounded text-center">
+                                                    <small class="text-muted d-block">Completed</small>
+                                                    <strong class="text-success" id="completedCount">0</strong>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="p-2 bg-light rounded text-center">
+                                                    <small class="text-muted d-block">Failed</small>
+                                                    <strong class="text-danger" id="failedCount">0</strong>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="p-2 bg-light rounded text-center">
+                                                    <small class="text-muted d-block">Skipped</small>
+                                                    <strong class="text-warning" id="skippedCount">0</strong>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="p-2 bg-light rounded text-center">
+                                                    <small class="text-muted d-block">ETA</small>
+                                                    <strong class="text-primary" id="etaDisplay">--:--</strong>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Additional Info -->
+                                        <div class="small text-muted">
+                                            <div><strong>Records Downloaded:</strong> <span id="recordsCount">0</span></div>
+                                            <div><strong>API Calls Made:</strong> <span id="apiCallsCount">0</span></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Action Buttons -->
+                                <div class="mt-3">
+                                    <form method="POST" action="{{ url_for('settings.start_download') }}" id="startDownloadForm" style="display: inline;">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-primary" id="startDownloadBtn">
+                                            <i class="bi bi-play-fill me-2"></i>Start Download
+                                        </button>
+                                    </form>
+
+                                    <form method="POST" action="" id="pauseDownloadForm" style="display: none;">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-warning">
+                                            <i class="bi bi-pause-fill me-2"></i>Pause Download
+                                        </button>
+                                    </form>
+
+                                    <form method="POST" action="" id="resumeDownloadForm" style="display: none;">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-success">
+                                            <i class="bi bi-play-fill me-2"></i>Resume Download
+                                        </button>
+                                    </form>
+
+                                    <form method="POST" action="" id="cancelDownloadForm" style="display: none;">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to cancel this download?');">
+                                            <i class="bi bi-x-circle me-2"></i>Cancel Download
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Data Management -->
-                        <div class="card">
+                        <div class="card mt-4">
                             <div class="card-header">
                                 <h5 class="card-title mb-0">
                                     <i class="bi bi-database me-2"></i>Data Management
@@ -531,26 +637,44 @@
                             </div>
                             <div class="card-body">
                                 <p class="text-muted mb-3">
-                                    Manage your stored historical data. Warning: These actions cannot be undone.
+                                    View statistics and manage your stored historical data.
                                 </p>
 
                                 <div class="row">
-                                    <div class="col-md-6 mb-3">
+                                    <div class="col-md-3 mb-3">
                                         <div class="p-3 bg-light rounded">
                                             <h6 class="mb-2">Storage Usage</h6>
                                             <p class="mb-0">
                                                 <strong class="text-primary" id="storageSize">Calculating...</strong>
                                             </p>
-                                            <small class="text-muted">Total historical data stored</small>
+                                            <small class="text-muted">Total data stored</small>
                                         </div>
                                     </div>
-                                    <div class="col-md-6 mb-3">
+                                    <div class="col-md-3 mb-3">
                                         <div class="p-3 bg-light rounded">
                                             <h6 class="mb-2">Data Points</h6>
                                             <p class="mb-0">
                                                 <strong class="text-primary" id="dataPoints">0</strong>
                                             </p>
-                                            <small class="text-muted">Total candles stored</small>
+                                            <small class="text-muted">Total candles</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 mb-3">
+                                        <div class="p-3 bg-light rounded">
+                                            <h6 class="mb-2">Coverage</h6>
+                                            <p class="mb-0">
+                                                <strong class="text-primary" id="stockCoverage">0 / 0</strong>
+                                            </p>
+                                            <small class="text-muted">Stocks with data</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 mb-3">
+                                        <div class="p-3 bg-light rounded">
+                                            <h6 class="mb-2">Date Range</h6>
+                                            <p class="mb-0">
+                                                <strong class="text-primary" id="dateRange">N/A</strong>
+                                            </p>
+                                            <small class="text-muted">Data availability</small>
                                         </div>
                                     </div>
                                 </div>
@@ -843,6 +967,233 @@
                 });
             });
         }
+
+        // Historical Data Download Management
+        let downloadPollInterval = null;
+        let globalBannerPollInterval = null;
+
+        // Function to update download status
+        function updateDownloadStatus() {
+            fetch('{{ url_for("settings.download_status") }}')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const activeTask = data.active_task;
+                        const storageStats = data.storage_stats;
+
+                        // Update storage statistics
+                        updateStorageStats(storageStats);
+
+                        // Update download UI based on task status
+                        if (activeTask) {
+                            updateDownloadUI(activeTask, data.eta_seconds);
+                            updateGlobalBanner(activeTask);
+                        } else {
+                            showIdleStatus();
+                            hideGlobalBanner();
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching download status:', error);
+                });
+        }
+
+        // Function to update storage stats
+        function updateStorageStats(stats) {
+            document.getElementById('storageSize').textContent = stats.estimated_size_mb + ' MB';
+            document.getElementById('dataPoints').textContent = stats.total_records.toLocaleString();
+            document.getElementById('stockCoverage').textContent = `${stats.stocks_with_data} / ${stats.total_stocks}`;
+
+            if (stats.earliest_date && stats.latest_date) {
+                const earliest = new Date(stats.earliest_date).toLocaleDateString();
+                const latest = new Date(stats.latest_date).toLocaleDateString();
+                document.getElementById('dateRange').textContent = `${earliest} - ${latest}`;
+            } else {
+                document.getElementById('dateRange').textContent = 'N/A';
+            }
+        }
+
+        // Function to update download UI
+        function updateDownloadUI(task, etaSeconds) {
+            // Show/hide appropriate status containers
+            document.getElementById('idleStatus').style.display = 'none';
+            document.getElementById('activeDownloadStatus').style.display = 'block';
+
+            // Update status badge
+            const statusBadge = document.getElementById('downloadStatusBadge');
+            statusBadge.textContent = task.status.charAt(0).toUpperCase() + task.status.slice(1);
+            statusBadge.className = 'badge';
+
+            switch(task.status) {
+                case 'running':
+                    statusBadge.classList.add('bg-primary');
+                    break;
+                case 'paused':
+                    statusBadge.classList.add('bg-warning');
+                    break;
+                case 'completed':
+                    statusBadge.classList.add('bg-success');
+                    break;
+                case 'failed':
+                    statusBadge.classList.add('bg-danger');
+                    break;
+                case 'cancelled':
+                    statusBadge.classList.add('bg-secondary');
+                    break;
+                default:
+                    statusBadge.classList.add('bg-info');
+            }
+
+            // Update current stock name
+            document.getElementById('currentStockName').textContent =
+                task.current_stock_symbol ? `Downloading ${task.current_stock_symbol}...` : '';
+
+            // Update progress text
+            const totalProcessed = task.completed_stocks + task.failed_stocks + task.skipped_stocks;
+            document.getElementById('downloadProgressText').textContent =
+                `${totalProcessed} / ${task.total_stocks} stocks`;
+
+            // Update progress bar
+            const progressBar = document.getElementById('downloadProgressBar');
+            const progressPercentage = Math.round(task.progress_percentage);
+            progressBar.style.width = progressPercentage + '%';
+            progressBar.setAttribute('aria-valuenow', progressPercentage);
+            document.getElementById('progressPercentage').textContent = progressPercentage + '%';
+
+            // Update statistics
+            document.getElementById('completedCount').textContent = task.completed_stocks;
+            document.getElementById('failedCount').textContent = task.failed_stocks;
+            document.getElementById('skippedCount').textContent = task.skipped_stocks;
+
+            // Update ETA
+            if (etaSeconds && task.status === 'running') {
+                const hours = Math.floor(etaSeconds / 3600);
+                const minutes = Math.floor((etaSeconds % 3600) / 60);
+                const seconds = Math.floor(etaSeconds % 60);
+                document.getElementById('etaDisplay').textContent =
+                    hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m ${seconds}s`;
+            } else {
+                document.getElementById('etaDisplay').textContent = '--:--';
+            }
+
+            // Update records and API calls
+            document.getElementById('recordsCount').textContent = task.total_records_downloaded.toLocaleString();
+            document.getElementById('apiCallsCount').textContent = task.total_api_calls.toLocaleString();
+
+            // Update button visibility
+            updateButtonVisibility(task);
+        }
+
+        // Function to update button visibility
+        function updateButtonVisibility(task) {
+            const startBtn = document.getElementById('startDownloadForm');
+            const pauseBtn = document.getElementById('pauseDownloadForm');
+            const resumeBtn = document.getElementById('resumeDownloadForm');
+            const cancelBtn = document.getElementById('cancelDownloadForm');
+
+            // Hide all first
+            startBtn.style.display = 'none';
+            pauseBtn.style.display = 'none';
+            resumeBtn.style.display = 'none';
+            cancelBtn.style.display = 'none';
+
+            // Show appropriate buttons based on status
+            if (task.status === 'running') {
+                pauseBtn.style.display = 'inline';
+                pauseBtn.action = `{{ url_for('settings.pause_download', task_id=0) }}`.replace('0', task.id);
+                cancelBtn.style.display = 'inline';
+                cancelBtn.action = `{{ url_for('settings.cancel_download', task_id=0) }}`.replace('0', task.id);
+            } else if (task.status === 'paused') {
+                resumeBtn.style.display = 'inline';
+                resumeBtn.action = `{{ url_for('settings.resume_download', task_id=0) }}`.replace('0', task.id);
+                cancelBtn.style.display = 'inline';
+                cancelBtn.action = `{{ url_for('settings.cancel_download', task_id=0) }}`.replace('0', task.id);
+            } else {
+                // Show start button for completed, failed, cancelled, or no task
+                startBtn.style.display = 'inline';
+            }
+        }
+
+        // Function to show idle status
+        function showIdleStatus() {
+            document.getElementById('idleStatus').style.display = 'block';
+            document.getElementById('activeDownloadStatus').style.display = 'none';
+            document.getElementById('startDownloadForm').style.display = 'inline';
+            document.getElementById('pauseDownloadForm').style.display = 'none';
+            document.getElementById('resumeDownloadForm').style.display = 'none';
+            document.getElementById('cancelDownloadForm').style.display = 'none';
+        }
+
+        // Function to update global banner
+        function updateGlobalBanner(task) {
+            const banner = document.getElementById('globalDownloadBanner');
+
+            if (task.status === 'running' || task.status === 'paused') {
+                banner.style.display = 'block';
+
+                const progressText = document.getElementById('bannerProgressText');
+                const statusText = document.getElementById('bannerStatusText');
+
+                progressText.textContent = `${Math.round(task.progress_percentage)}% complete (${task.completed_stocks + task.failed_stocks + task.skipped_stocks}/${task.total_stocks} stocks)`;
+
+                if (task.status === 'running') {
+                    statusText.textContent = task.current_stock_symbol ?
+                        `Currently downloading: ${task.current_stock_symbol}` :
+                        'Processing...';
+                } else if (task.status === 'paused') {
+                    statusText.textContent = 'Download paused - you can resume from Settings';
+                }
+            } else {
+                banner.style.display = 'none';
+            }
+        }
+
+        // Function to hide global banner
+        function hideGlobalBanner() {
+            document.getElementById('globalDownloadBanner').style.display = 'none';
+        }
+
+        // Start polling if on historical tab
+        if (document.getElementById('downloadControlPanel')) {
+            // Initial load
+            updateDownloadStatus();
+
+            // Poll every 2 seconds
+            downloadPollInterval = setInterval(updateDownloadStatus, 2000);
+        }
+
+        // Global banner polling (on all pages if user is logged in)
+        {% if current_user.is_authenticated %}
+        function checkGlobalDownloadStatus() {
+            fetch('{{ url_for("settings.download_status") }}')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.active_task) {
+                        updateGlobalBanner(data.active_task);
+                    } else {
+                        hideGlobalBanner();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking global download status:', error);
+                });
+        }
+
+        // Check immediately and then every 5 seconds
+        checkGlobalDownloadStatus();
+        globalBannerPollInterval = setInterval(checkGlobalDownloadStatus, 5000);
+        {% endif %}
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (downloadPollInterval) {
+                clearInterval(downloadPollInterval);
+            }
+            if (globalBannerPollInterval) {
+                clearInterval(globalBannerPollInterval);
+            }
+        });
     });
 </script>
 {% endblock %}

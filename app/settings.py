@@ -6,7 +6,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required, current_user, logout_user
 from werkzeug.utils import secure_filename
 from app import db
-from app.models import User, HistoricalDataSettings
+from app.models import User, HistoricalDataSettings, HistoricalData, DownloadTask, DownloadLog, Instrument
 from app.forms import BackupForm, RestoreDatabaseForm, EmergencyRestoreForm, KiteCredentialsForm
 from app.kite_auth import get_kite_client
 
@@ -486,16 +486,12 @@ def update_historical_data_settings():
 def clear_historical_data():
     """Clear all historical data from the database"""
     try:
-        # TODO: Implement this when HistoricalData model is created
-        # For now, just show a placeholder message
+        # Delete all historical candle data
+        deleted_count = HistoricalData.query.delete()
+        db.session.commit()
 
-        # This will eventually delete all historical candle data
-        # from app.models import HistoricalData
-        # deleted_count = HistoricalData.query.delete()
-        # db.session.commit()
-
-        flash('Historical data clearing functionality will be implemented when data download is set up.', 'info')
-        current_app.logger.info(f'User {current_user.username} attempted to clear historical data')
+        flash(f'Successfully cleared {deleted_count} historical data records.', 'success')
+        current_app.logger.info(f'User {current_user.username} cleared {deleted_count} historical data records')
 
     except Exception as e:
         db.session.rollback()
@@ -503,3 +499,247 @@ def clear_historical_data():
         current_app.logger.error(f'Error clearing historical data: {str(e)}')
 
     return redirect(url_for('settings.index', tab='historical'))
+
+
+@settings_bp.route('/historical-data/start-download', methods=['POST'])
+@login_required
+def start_download():
+    """Start a new historical data download task"""
+    try:
+        from app.download_service import create_download_task, get_active_task, HistoricalDataDownloader
+
+        # Check if there's already an active task
+        active_task = get_active_task(current_user.id)
+        if active_task:
+            flash(f'You already have an active download task (Status: {active_task.status}).', 'warning')
+            return redirect(url_for('settings.index', tab='historical'))
+
+        # Create new task
+        task = create_download_task(current_user.id)
+        if not task:
+            flash('Please configure historical data settings first.', 'warning')
+            return redirect(url_for('settings.index', tab='historical'))
+
+        # Start download in background
+        downloader = HistoricalDataDownloader(task.id)
+        downloader.start_download()
+
+        flash('Historical data download started in background!', 'success')
+        current_app.logger.info(f'User {current_user.username} started download task {task.id}')
+
+    except Exception as e:
+        flash(f'Error starting download: {str(e)}', 'danger')
+        current_app.logger.error(f'Error starting download: {str(e)}')
+
+    return redirect(url_for('settings.index', tab='historical'))
+
+
+@settings_bp.route('/historical-data/pause-download/<int:task_id>', methods=['POST'])
+@login_required
+def pause_download(task_id):
+    """Pause a running download task"""
+    try:
+        from app.download_service import active_downloads
+
+        # Verify task belongs to user
+        task = DownloadTask.query.filter_by(id=task_id, user_id=current_user.id).first_or_404()
+
+        if task.status != 'running':
+            flash(f'Task is not running (Status: {task.status}).', 'warning')
+            return redirect(url_for('settings.index', tab='historical'))
+
+        # Pause the download
+        if task_id in active_downloads:
+            downloader = active_downloads[task_id]
+            downloader.pause_download()
+            flash('Download paused successfully.', 'success')
+        else:
+            flash('Download task not found in active downloads.', 'warning')
+
+        current_app.logger.info(f'User {current_user.username} paused download task {task_id}')
+
+    except Exception as e:
+        flash(f'Error pausing download: {str(e)}', 'danger')
+        current_app.logger.error(f'Error pausing download: {str(e)}')
+
+    return redirect(url_for('settings.index', tab='historical'))
+
+
+@settings_bp.route('/historical-data/resume-download/<int:task_id>', methods=['POST'])
+@login_required
+def resume_download(task_id):
+    """Resume a paused download task"""
+    try:
+        from app.download_service import HistoricalDataDownloader
+
+        # Verify task belongs to user
+        task = DownloadTask.query.filter_by(id=task_id, user_id=current_user.id).first_or_404()
+
+        if task.status != 'paused':
+            flash(f'Task is not paused (Status: {task.status}).', 'warning')
+            return redirect(url_for('settings.index', tab='historical'))
+
+        # Resume the download
+        downloader = HistoricalDataDownloader(task_id)
+        downloader.start_download()
+
+        flash('Download resumed successfully.', 'success')
+        current_app.logger.info(f'User {current_user.username} resumed download task {task_id}')
+
+    except Exception as e:
+        flash(f'Error resuming download: {str(e)}', 'danger')
+        current_app.logger.error(f'Error resuming download: {str(e)}')
+
+    return redirect(url_for('settings.index', tab='historical'))
+
+
+@settings_bp.route('/historical-data/cancel-download/<int:task_id>', methods=['POST'])
+@login_required
+def cancel_download(task_id):
+    """Cancel a running or paused download task"""
+    try:
+        from app.download_service import active_downloads
+
+        # Verify task belongs to user
+        task = DownloadTask.query.filter_by(id=task_id, user_id=current_user.id).first_or_404()
+
+        if task.status not in ['running', 'paused']:
+            flash(f'Task cannot be cancelled (Status: {task.status}).', 'warning')
+            return redirect(url_for('settings.index', tab='historical'))
+
+        # Cancel the download
+        if task_id in active_downloads:
+            downloader = active_downloads[task_id]
+            downloader.cancel_download()
+        else:
+            # If not in active downloads, just update status
+            task.status = 'cancelled'
+            task.completed_at = datetime.utcnow()
+            db.session.commit()
+
+        flash('Download cancelled successfully.', 'success')
+        current_app.logger.info(f'User {current_user.username} cancelled download task {task_id}')
+
+    except Exception as e:
+        flash(f'Error cancelling download: {str(e)}', 'danger')
+        current_app.logger.error(f'Error cancelling download: {str(e)}')
+
+    return redirect(url_for('settings.index', tab='historical'))
+
+
+@settings_bp.route('/historical-data/status', methods=['GET'])
+@login_required
+def download_status():
+    """Get current download status and storage stats"""
+    try:
+        from app.download_service import get_active_task, get_storage_stats
+
+        # Get active task
+        active_task = get_active_task(current_user.id)
+
+        # Get storage stats
+        storage_stats = get_storage_stats(current_user.id)
+
+        # Get recent tasks
+        recent_tasks = DownloadTask.query.filter_by(
+            user_id=current_user.id
+        ).order_by(DownloadTask.created_at.desc()).limit(5).all()
+
+        return jsonify({
+            'success': True,
+            'active_task': active_task.to_dict() if active_task else None,
+            'storage_stats': storage_stats,
+            'recent_tasks': [task.to_dict() for task in recent_tasks],
+            'eta_seconds': active_task.calculate_eta() if active_task else None
+        })
+
+    except Exception as e:
+        current_app.logger.error(f'Error getting download status: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/historical-data/stock-coverage', methods=['GET'])
+@login_required
+def stock_coverage():
+    """Get list of stocks with their download status"""
+    try:
+        # Get search and pagination parameters
+        search = request.args.get('search', '').strip()
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+
+        # Query all NIFTY 500 stocks
+        query = Instrument.query.filter_by(
+            exchange='NSE',
+            instrument_type='EQ',
+            is_nifty500=True
+        )
+
+        # Apply search filter
+        if search:
+            query = query.filter(Instrument.tradingsymbol.ilike(f'%{search}%'))
+
+        # Get paginated results
+        pagination = query.order_by(Instrument.tradingsymbol).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+
+        # Check which stocks have historical data
+        stocks_data = []
+        for instrument in pagination.items:
+            has_data = HistoricalData.query.filter_by(
+                instrument_id=instrument.id
+            ).first() is not None
+
+            # Get record count and date range if has data
+            record_count = 0
+            earliest_date = None
+            latest_date = None
+
+            if has_data:
+                record_count = HistoricalData.query.filter_by(
+                    instrument_id=instrument.id
+                ).count()
+
+                earliest = db.session.query(db.func.min(HistoricalData.timestamp)).filter_by(
+                    instrument_id=instrument.id
+                ).scalar()
+                latest = db.session.query(db.func.max(HistoricalData.timestamp)).filter_by(
+                    instrument_id=instrument.id
+                ).scalar()
+
+                earliest_date = earliest.isoformat() if earliest else None
+                latest_date = latest.isoformat() if latest else None
+
+            stocks_data.append({
+                'id': instrument.id,
+                'symbol': instrument.tradingsymbol,
+                'name': instrument.name,
+                'has_data': has_data,
+                'record_count': record_count,
+                'earliest_date': earliest_date,
+                'latest_date': latest_date
+            })
+
+        return jsonify({
+            'success': True,
+            'stocks': stocks_data,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': pagination.total,
+                'pages': pagination.pages,
+                'has_prev': pagination.has_prev,
+                'has_next': pagination.has_next
+            }
+        })
+
+    except Exception as e:
+        current_app.logger.error(f'Error getting stock coverage: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

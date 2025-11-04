@@ -513,6 +513,176 @@ class HistoricalDataSettings(db.Model):
         return f'<HistoricalDataSettings User:{self.user_id} Interval:{self.candle_interval}>'
 
 
+class HistoricalData(db.Model):
+    """Model for storing historical candlestick data"""
+
+    __tablename__ = 'historical_data'
+
+    id = db.Column(db.Integer, primary_key=True)
+    instrument_id = db.Column(db.Integer, db.ForeignKey('instruments.id'), nullable=False, index=True)
+    timestamp = db.Column(db.DateTime, nullable=False, index=True)
+    interval = db.Column(db.String(20), nullable=False, index=True)  # 'minute', '3minute', '5minute', '10minute', '15minute', '30minute', '60minute', 'day'
+
+    # OHLCV data
+    open = db.Column(db.Float, nullable=False)
+    high = db.Column(db.Float, nullable=False)
+    low = db.Column(db.Float, nullable=False)
+    close = db.Column(db.Float, nullable=False)
+    volume = db.Column(db.Integer, default=0)
+    oi = db.Column(db.Integer, default=0)  # Open Interest (for derivatives)
+
+    # Metadata
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationships
+    instrument = db.relationship('Instrument', backref=db.backref('historical_data', lazy='dynamic'))
+
+    # Unique constraint: One candle per instrument per timestamp per interval
+    __table_args__ = (
+        db.UniqueConstraint('instrument_id', 'timestamp', 'interval', name='uq_instrument_timestamp_interval'),
+        db.Index('ix_historical_data_lookup', 'instrument_id', 'interval', 'timestamp'),
+    )
+
+    def __repr__(self):
+        return f'<HistoricalData {self.instrument_id} @ {self.timestamp} [{self.interval}]>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'open': self.open,
+            'high': self.high,
+            'low': self.low,
+            'close': self.close,
+            'volume': self.volume,
+            'oi': self.oi
+        }
+
+
+class DownloadTask(db.Model):
+    """Model for tracking historical data download tasks"""
+
+    __tablename__ = 'download_tasks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+
+    # Task configuration
+    interval = db.Column(db.String(20), nullable=False)  # Candle interval being downloaded
+    from_date = db.Column(db.Date, nullable=False)
+    to_date = db.Column(db.Date, nullable=False)
+    requests_per_second = db.Column(db.Integer, default=1)
+
+    # Progress tracking
+    status = db.Column(db.String(20), default='pending', nullable=False, index=True)  # 'pending', 'running', 'paused', 'completed', 'failed', 'cancelled'
+    progress_percentage = db.Column(db.Float, default=0.0)
+    total_stocks = db.Column(db.Integer, default=0)
+    completed_stocks = db.Column(db.Integer, default=0)
+    failed_stocks = db.Column(db.Integer, default=0)
+    skipped_stocks = db.Column(db.Integer, default=0)  # Already had data
+    current_stock_symbol = db.Column(db.String(50), nullable=True)
+    current_stock_id = db.Column(db.Integer, nullable=True)  # Last processed instrument_id for resume
+
+    # Statistics
+    total_records_downloaded = db.Column(db.Integer, default=0)
+    total_api_calls = db.Column(db.Integer, default=0)
+
+    # Timestamps
+    started_at = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    paused_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Error handling
+    error_message = db.Column(db.Text, nullable=True)
+    error_count = db.Column(db.Integer, default=0)
+
+    # Relationships
+    user = db.relationship('User', backref=db.backref('download_tasks', lazy='dynamic', cascade='all, delete-orphan'))
+    logs = db.relationship('DownloadLog', back_populates='task', lazy='dynamic', cascade='all, delete-orphan', order_by='DownloadLog.created_at.desc()')
+
+    def __repr__(self):
+        return f'<DownloadTask {self.id} User:{self.user_id} Status:{self.status} Progress:{self.progress_percentage}%>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'status': self.status,
+            'progress_percentage': round(self.progress_percentage, 2),
+            'total_stocks': self.total_stocks,
+            'completed_stocks': self.completed_stocks,
+            'failed_stocks': self.failed_stocks,
+            'skipped_stocks': self.skipped_stocks,
+            'current_stock_symbol': self.current_stock_symbol,
+            'total_records_downloaded': self.total_records_downloaded,
+            'total_api_calls': self.total_api_calls,
+            'interval': self.interval,
+            'from_date': self.from_date.isoformat() if self.from_date else None,
+            'to_date': self.to_date.isoformat() if self.to_date else None,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'error_message': self.error_message,
+            'error_count': self.error_count
+        }
+
+    def calculate_eta(self):
+        """Calculate estimated time to completion in seconds"""
+        if self.status != 'running' or not self.started_at or self.completed_stocks == 0:
+            return None
+
+        elapsed = (datetime.utcnow() - self.started_at).total_seconds()
+        avg_time_per_stock = elapsed / self.completed_stocks
+        remaining_stocks = self.total_stocks - self.completed_stocks
+        return remaining_stocks * avg_time_per_stock
+
+
+class DownloadLog(db.Model):
+    """Model for logging individual stock download results"""
+
+    __tablename__ = 'download_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey('download_tasks.id'), nullable=False, index=True)
+    instrument_id = db.Column(db.Integer, db.ForeignKey('instruments.id'), nullable=False, index=True)
+
+    # Download details
+    symbol = db.Column(db.String(50), nullable=False)
+    status = db.Column(db.String(20), nullable=False)  # 'success', 'failed', 'skipped'
+    records_downloaded = db.Column(db.Integer, default=0)
+    api_calls_made = db.Column(db.Integer, default=0)
+
+    # Timestamps
+    started_at = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Error handling
+    error_message = db.Column(db.Text, nullable=True)
+    retry_count = db.Column(db.Integer, default=0)
+
+    # Relationships
+    task = db.relationship('DownloadTask', back_populates='logs')
+    instrument = db.relationship('Instrument', backref=db.backref('download_logs', lazy='dynamic'))
+
+    def __repr__(self):
+        return f'<DownloadLog Task:{self.task_id} {self.symbol} Status:{self.status}>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'symbol': self.symbol,
+            'status': self.status,
+            'records_downloaded': self.records_downloaded,
+            'api_calls_made': self.api_calls_made,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'error_message': self.error_message,
+            'retry_count': self.retry_count
+        }
+
+
 @login_manager.user_loader
 def load_user(user_id):
     """Load user by ID for Flask-Login"""

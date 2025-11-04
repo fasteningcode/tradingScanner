@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}{{ title }} - Flask Dashboard{% endblock %}</title>
 
     <!-- Bootstrap 5 CSS -->
@@ -28,51 +29,91 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    {% if current_user.is_authenticated %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('dashboard.index') }}">
-                                <i class="bi bi-house-door"></i> Dashboard
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('dashboard.profile') }}">
-                                <i class="bi bi-person"></i> Profile
-                            </a>
-                        </li>
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
-                                <i class="bi bi-person-circle"></i> {{ current_user.username }}
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li><a class="dropdown-item" href="{{ url_for('dashboard.profile') }}">
-                                    <i class="bi bi-person-gear"></i> Profile
-                                </a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('settings.index') }}">
-                                    <i class="bi bi-gear"></i> Settings
-                                </a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('auth.change_password') }}">
-                                    <i class="bi bi-shield-lock"></i> Change Password
-                                </a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}">
-                                    <i class="bi bi-box-arrow-right"></i> Logout
-                                </a></li>
-                            </ul>
-                        </li>
-                    {% else %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('auth.login') }}">
-                                <i class="bi bi-box-arrow-in-right"></i> Login
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('auth.register') }}">
-                                <i class="bi bi-person-plus"></i> Register
-                            </a>
-                        </li>
-                    {% endif %}
+                {% if current_user.is_authenticated %}
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint and 'dashboard' in request.endpoint %}active{% endif %}" href="{{ url_for('dashboard.index') }}">
+                            <i class="bi bi-speedometer2"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint and 'sectors' in request.endpoint %}active{% endif %}" href="{{ url_for('sectors.index') }}">
+                            <i class="bi bi-pie-chart"></i> Sectors
+                        </a>
+                    </li>
+                    <!-- Temporarily hidden - Not yet implemented -->
+                    <!--
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint and 'scanner' in request.endpoint %}active{% endif %}" href="{{ url_for('scanner.index') }}">
+                            <i class="bi bi-search"></i> Scanner
+                        </a>
+                    </li>
+                    -->
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint and 'stocks' in request.endpoint %}active{% endif %}" href="{{ url_for('stocks.index') }}">
+                            <i class="bi bi-graph-up"></i> Stocks
+                        </a>
+                    </li>
+                    <!-- Temporarily hidden - Not yet implemented -->
+                    <!--
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint and 'watchlist' in request.endpoint %}active{% endif %}" href="{{ url_for('watchlist.index') }}">
+                            <i class="bi bi-star"></i> WatchList
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint and 'orders' in request.endpoint %}active{% endif %}" href="{{ url_for('orders.index') }}">
+                            <i class="bi bi-receipt"></i> Orders
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint and 'positions' in request.endpoint %}active{% endif %}" href="{{ url_for('positions.index') }}">
+                            <i class="bi bi-briefcase"></i> Positions
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint and 'backtest' in request.endpoint %}active{% endif %}" href="{{ url_for('backtest.index') }}">
+                            <i class="bi bi-clock-history"></i> Backtest
+                        </a>
+                    </li>
+                    -->
                 </ul>
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i> {{ current_user.username }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{{ url_for('dashboard.profile') }}">
+                                <i class="bi bi-person-gear"></i> Profile
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('settings.index') }}">
+                                <i class="bi bi-gear"></i> Settings
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('auth.change_password') }}">
+                                <i class="bi bi-shield-lock"></i> Change Password
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}">
+                                <i class="bi bi-box-arrow-right"></i> Logout
+                            </a></li>
+                        </ul>
+                    </li>
+                </ul>
+                {% else %}
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('auth.login') }}">
+                            <i class="bi bi-box-arrow-in-right"></i> Login
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('auth.register') }}">
+                            <i class="bi bi-person-plus"></i> Register
+                        </a>
+                    </li>
+                </ul>
+                {% endif %}
             </div>
         </div>
     </nav>
@@ -89,6 +130,26 @@
                 {% endfor %}
             {% endif %}
         {% endwith %}
+    </div>
+
+    <!-- Global Download Notification Banner -->
+    <div id="globalDownloadBanner" class="alert alert-warning alert-dismissible fade show" role="alert" style="display: none; margin: 0; border-radius: 0; border-left: 0; border-right: 0;">
+        <div class="container">
+            <div class="d-flex align-items-center">
+                <div class="spinner-border spinner-border-sm me-3" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <div class="flex-grow-1">
+                    <strong><i class="bi bi-cloud-download me-2"></i>Background Download in Progress</strong>
+                    <span id="bannerProgressText" class="ms-2"></span>
+                    <div class="small text-muted" id="bannerStatusText"></div>
+                </div>
+                <a href="{{ url_for('settings.index', tab='historical') }}" class="btn btn-sm btn-outline-dark me-2">
+                    View Progress
+                </a>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        </div>
     </div>
 
     <!-- Main Content -->
