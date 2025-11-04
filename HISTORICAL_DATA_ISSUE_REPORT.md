@@ -13,7 +13,9 @@ The historical data download is failing with "invalid token" errors. After exten
 ✅ **Profile API works perfectly** (authentication successful)
 ❌ **Historical Data API is blocked** (insufficient permissions)
 
-**Root Cause:** Your Kite Connect app doesn't have permission to access the Historical Data API.
+**Root Cause:** Your access token was generated BEFORE historical data permissions were enabled on your Kite Connect app.
+
+**Critical Discovery:** Kite access tokens have permissions baked into them at the time of creation. Even if you enable historical data permissions later, existing tokens won't work. You need to regenerate the token by reconnecting.
 
 ---
 
@@ -53,30 +55,42 @@ This is a common configuration issue with Kite Connect apps.
 
 ---
 
-## Solution: Enable Historical Data Access
+## Solution: Regenerate Access Token with Historical Data Permissions
 
-### Step 1: Go to Kite Connect Developer Console
+### IMPORTANT: Token Permissions Are Set at Creation Time
+
+Kite access tokens have permissions baked into them when they're generated. If you enabled historical data permissions AFTER generating your current token, the token won't have those permissions. **You MUST reconnect to generate a new token**.
+
+### Step 1: Verify Historical Data is Enabled on Your App
 Visit: **https://developers.kite.trade/apps**
 
-### Step 2: Find Your App
-Look for the app with API Key: `541eaxycmh...` (your current app)
+1. Find your app (API Key: `541eaxycmh...`)
+2. Check that **"Historical Data"** permission is enabled
+3. As of February 2025, historical data is included FREE with base Kite Connect subscription
 
-### Step 3: Check Permissions
-In the app settings, verify that **"Historical Data"** permission is:
-- ☑️ Enabled/Checked
-- ☑️ Active subscription (if required)
+### Step 2: Reconnect Your Kite Account (CRITICAL STEP)
+This generates a NEW access token with the correct permissions:
 
-### Step 4: Subscribe to Historical Data API (if needed)
-- Zerodha may require a paid subscription for Historical Data API access
-- Check the pricing at: https://kite.trade/pricing
-- Historical Data API is typically included in Kite Connect subscription plans
+1. Open your Flask app in browser
+2. Go to **Settings** → **Kite** tab (or Dashboard)
+3. Click **"Disconnect Kite"** button
+4. Click **"Connect to Kite"** button
+5. You'll be redirected to Zerodha login
+6. Log in and authorize the app
+7. After authorization, a NEW token will be generated with historical data permissions
 
-### Step 5: Reconnect Your Kite Account
-After enabling historical data permissions:
-1. In your app, go to **Settings** or **Dashboard**
-2. Click **"Disconnect Kite"**
-3. Click **"Connect to Kite"** again
-4. Authorize the app with the new permissions
+### Step 3: Verify the Fix
+After reconnecting, test the API access:
+```bash
+source venv/bin/activate
+python test_kite_token.py
+```
+
+You should now see:
+```
+✅ Profile API works
+✅ Got X candles  # Historical data works!
+```
 
 ---
 

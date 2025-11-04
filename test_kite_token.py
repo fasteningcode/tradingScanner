@@ -10,6 +10,11 @@ from kiteconnect import KiteConnect
 
 def test_kite_token():
     """Test that Kite token works correctly"""
+    # Enable debug logging
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+    logging.getLogger('urllib3').setLevel(logging.DEBUG)
+
     app = create_app()
 
     with app.app_context():
@@ -64,6 +69,12 @@ def test_kite_token():
             from datetime import datetime, timedelta
             from kiteconnect.exceptions import InputException
 
+            # Debug: Check if access token is set
+            print(f"   API Key: {kite.api_key}")
+            print(f"   Access Token set: {'Yes' if hasattr(kite, 'access_token') and kite.access_token else 'No'}")
+            if hasattr(kite, 'access_token') and kite.access_token:
+                print(f"   Access Token (first 20 chars): {kite.access_token[:20]}...")
+
             # Get a test instrument
             from app.models import Instrument
             test_inst = Instrument.query.filter_by(
@@ -83,6 +94,8 @@ def test_kite_token():
 
             print(f"   Date range: {from_date.date()} to {to_date.date()}")
 
+            # Add debug to see the actual request
+            print(f"   Making API call...")
             data = kite.historical_data(
                 instrument_token=test_inst.instrument_token,
                 from_date=from_date,
