@@ -46,6 +46,26 @@
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
+                        <button class="nav-link {{ 'active' if active_tab == 'kite' else '' }}"
+                                id="kite-tab"
+                                data-bs-toggle="tab"
+                                data-bs-target="#kite"
+                                type="button"
+                                role="tab">
+                            <i class="bi bi-graph-up me-2"></i>Kite Connect
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link {{ 'active' if active_tab == 'historical' else '' }}"
+                                id="historical-tab"
+                                data-bs-toggle="tab"
+                                data-bs-target="#historical"
+                                type="button"
+                                role="tab">
+                            <i class="bi bi-clock-history me-2"></i>Historical Data
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
                         <button class="nav-link {{ 'active' if active_tab == 'about' else '' }}"
                                 id="about-tab"
                                 data-bs-toggle="tab"
@@ -238,6 +258,310 @@
                         </div>
                     </div>
 
+                    <!-- Kite Connect Tab -->
+                    <div class="tab-pane fade {{ 'show active' if active_tab == 'kite' else '' }}"
+                         id="kite"
+                         role="tabpanel">
+                        <h4 class="mb-3">Kite Connect Settings</h4>
+
+                        <!-- Connection Status Card -->
+                        <div class="card mb-4">
+                            <div class="card-header {% if current_user.kite_connected and current_user.is_kite_token_valid() %}bg-success{% elif current_user.kite_connected %}bg-warning{% else %}bg-secondary{% endif %} text-white">
+                                <h5 class="card-title mb-0">
+                                    <i class="bi bi-link-45deg me-2"></i>Connection Status
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                {% if current_user.kite_connected %}
+                                    <div class="mb-3">
+                                        <strong>Status:</strong>
+                                        {% if current_user.is_kite_token_valid() %}
+                                            <span class="badge bg-success">Connected & Valid</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">Connected (Token Expired)</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="mb-3">
+                                        <strong>User ID:</strong> {{ current_user.kite_user_id or 'N/A' }}
+                                    </div>
+                                    <div class="mb-3">
+                                        <strong>Last Connected:</strong> {{ current_user.kite_last_connected.strftime('%B %d, %Y at %I:%M %p') if current_user.kite_last_connected else 'N/A' }}
+                                    </div>
+                                    <div class="mb-3">
+                                        <strong>Token Expires:</strong> {{ current_user.kite_access_token_expires.strftime('%B %d, %Y at %I:%M %p UTC') if current_user.kite_access_token_expires else 'N/A' }}
+                                    </div>
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle me-2"></i>
+                                        Kite access tokens expire daily at 7:30 AM IST. You will need to reconnect after expiry.
+                                    </div>
+                                {% else %}
+                                    <div class="alert alert-secondary">
+                                        <i class="bi bi-plug me-2"></i>
+                                        Not connected to Kite Connect. <a href="{{ url_for('kite.connect') }}" class="alert-link">Connect now</a>
+                                    </div>
+                                {% endif %}
+
+                                <div class="d-flex gap-2">
+                                    <a href="{{ url_for('kite.connect') }}" class="btn btn-primary">
+                                        <i class="bi bi-link-45deg me-2"></i>{% if current_user.kite_connected %}Reconnect{% else %}Connect{% endif %}
+                                    </a>
+                                    {% if current_user.kite_connected %}
+                                        <button type="button" class="btn btn-info" id="validateTokenBtn">
+                                            <i class="bi bi-check-circle me-2"></i>Validate Token
+                                        </button>
+                                        <form method="POST" action="{{ url_for('settings.clear_kite_credentials') }}" class="d-inline">
+                                            <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to clear all Kite Connect credentials?');">
+                                                <i class="bi bi-x-circle me-2"></i>Clear Credentials
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Token Validation Result -->
+                        <div id="validationResult" class="mb-4" style="display: none;"></div>
+
+                        <!-- Manual Credentials Update -->
+                        <div class="card">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="card-title mb-0">
+                                    <i class="bi bi-pencil-square me-2"></i>Manual Credentials Update
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <p class="card-text">
+                                    You can manually update your Kite Connect credentials here. This is useful if you have obtained
+                                    credentials through other means or need to update them manually.
+                                </p>
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle me-2"></i>
+                                    <strong>Warning:</strong> Only update these fields if you know what you're doing. Incorrect credentials
+                                    will prevent API operations from working.
+                                </div>
+
+                                <form method="POST" action="{{ url_for('settings.update_kite_credentials') }}">
+                                    {{ kite_form.hidden_tag() }}
+
+                                    <div class="mb-3">
+                                        {{ kite_form.access_token.label(class="form-label") }}
+                                        {{ kite_form.access_token(class="form-control" + (" is-invalid" if kite_form.access_token.errors else ""), placeholder="Enter access token") }}
+                                        {% if kite_form.access_token.errors %}
+                                            <div class="invalid-feedback">
+                                                {% for error in kite_form.access_token.errors %}
+                                                    {{ error }}
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
+                                        <small class="form-text text-muted">
+                                            Your Kite Connect access token (obtained after authentication)
+                                        </small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        {{ kite_form.user_id.label(class="form-label") }}
+                                        {{ kite_form.user_id(class="form-control" + (" is-invalid" if kite_form.user_id.errors else ""), placeholder="Enter user ID") }}
+                                        {% if kite_form.user_id.errors %}
+                                            <div class="invalid-feedback">
+                                                {% for error in kite_form.user_id.errors %}
+                                                    {{ error }}
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
+                                        <small class="form-text text-muted">
+                                            Your Kite user ID (e.g., ZA1234)
+                                        </small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        {{ kite_form.public_token.label(class="form-label") }}
+                                        {{ kite_form.public_token(class="form-control", placeholder="Enter public token (optional)") }}
+                                        <small class="form-text text-muted">
+                                            Optional: Public token from Kite Connect
+                                        </small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        {{ kite_form.refresh_token.label(class="form-label") }}
+                                        {{ kite_form.refresh_token(class="form-control", placeholder="Enter refresh token (optional)") }}
+                                        <small class="form-text text-muted">
+                                            Optional: Refresh token (currently not supported by Kite)
+                                        </small>
+                                    </div>
+
+                                    {{ kite_form.submit(class="btn btn-primary") }}
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Historical Data Tab -->
+                    <div class="tab-pane fade {{ 'show active' if active_tab == 'historical' else '' }}"
+                         id="historical"
+                         role="tabpanel">
+                        <h4 class="mb-3">Historical Data Settings</h4>
+
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            Configure your preferences for downloading historical price data from Kite Connect API.
+                        </div>
+
+                        <!-- Settings Form -->
+                        <form method="POST" action="{{ url_for('settings.update_historical_data_settings') }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0">
+                                        <i class="bi bi-sliders me-2"></i>Download Configuration
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <!-- Rate Limiting -->
+                                    <div class="mb-3">
+                                        <label for="requestsPerSecond" class="form-label">
+                                            <i class="bi bi-speedometer2 me-2"></i>Requests Per Second
+                                        </label>
+                                        <select id="requestsPerSecond" name="requests_per_second" class="form-select">
+                                            <option value="1" {% if historical_settings and historical_settings.requests_per_second == 1 %}selected{% endif %}>1 request/second (Safe)</option>
+                                            <option value="2" {% if historical_settings and historical_settings.requests_per_second == 2 %}selected{% endif %}>2 requests/second (Moderate)</option>
+                                            <option value="3" {% if historical_settings and historical_settings.requests_per_second == 3 %}selected{% endif %}>3 requests/second (Maximum)</option>
+                                        </select>
+                                        <small class="form-text text-muted">
+                                            Kite Connect API allows maximum 3 requests per second. Higher rates may result in rate limiting.
+                                        </small>
+                                    </div>
+
+                                    <!-- Candle Interval -->
+                                    <div class="mb-3">
+                                        <label for="candleInterval" class="form-label">
+                                            <i class="bi bi-bar-chart-line me-2"></i>Candle Interval
+                                        </label>
+                                        <select id="candleInterval" name="candle_interval" class="form-select">
+                                            <option value="minute" {% if historical_settings and historical_settings.candle_interval == 'minute' %}selected{% endif %}>1 Minute</option>
+                                            <option value="3minute" {% if historical_settings and historical_settings.candle_interval == '3minute' %}selected{% endif %}>3 Minutes</option>
+                                            <option value="5minute" {% if historical_settings and historical_settings.candle_interval == '5minute' %}selected{% endif %}>5 Minutes</option>
+                                            <option value="10minute" {% if historical_settings and historical_settings.candle_interval == '10minute' %}selected{% endif %}>10 Minutes</option>
+                                            <option value="15minute" {% if historical_settings and historical_settings.candle_interval == '15minute' %}selected{% endif %}>15 Minutes</option>
+                                            <option value="30minute" {% if historical_settings and historical_settings.candle_interval == '30minute' %}selected{% endif %}>30 Minutes</option>
+                                            <option value="60minute" {% if historical_settings and historical_settings.candle_interval == '60minute' %}selected{% endif %}>60 Minutes</option>
+                                            <option value="day" {% if historical_settings and historical_settings.candle_interval == 'day' or not historical_settings %}selected{% endif %}>Daily</option>
+                                        </select>
+                                        <small class="form-text text-muted">
+                                            Select the timeframe for historical candle data. Smaller intervals require more API calls and storage.
+                                        </small>
+                                    </div>
+
+                                    <!-- Date Range Preset -->
+                                    <div class="mb-3">
+                                        <label for="datePreset" class="form-label">
+                                            <i class="bi bi-calendar-range me-2"></i>Date Range
+                                        </label>
+                                        <select id="datePreset" name="date_preset" class="form-select">
+                                            <option value="1day" {% if historical_settings and historical_settings.date_preset == '1day' %}selected{% endif %}>Last 1 Day</option>
+                                            <option value="1week" {% if historical_settings and historical_settings.date_preset == '1week' %}selected{% endif %}>Last 1 Week</option>
+                                            <option value="1month" {% if historical_settings and historical_settings.date_preset == '1month' or not historical_settings %}selected{% endif %}>Last 1 Month</option>
+                                            <option value="3months" {% if historical_settings and historical_settings.date_preset == '3months' %}selected{% endif %}>Last 3 Months</option>
+                                            <option value="6months" {% if historical_settings and historical_settings.date_preset == '6months' %}selected{% endif %}>Last 6 Months</option>
+                                            <option value="1year" {% if historical_settings and historical_settings.date_preset == '1year' %}selected{% endif %}>Last 1 Year</option>
+                                            <option value="5years" {% if historical_settings and historical_settings.date_preset == '5years' %}selected{% endif %}>Last 5 Years</option>
+                                            <option value="10years" {% if historical_settings and historical_settings.date_preset == '10years' %}selected{% endif %}>Last 10 Years</option>
+                                            <option value="custom" {% if historical_settings and historical_settings.date_preset == 'custom' %}selected{% endif %}>Custom Range</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Custom Date Range (hidden by default) -->
+                                    <div id="customDateRange" style="display: none;">
+                                        <div class="row">
+                                            <div class="col-md-6 mb-3">
+                                                <label for="fromDate" class="form-label">From Date</label>
+                                                <input type="date" id="fromDate" name="from_date" class="form-control"
+                                                       value="{% if historical_settings and historical_settings.from_date %}{{ historical_settings.from_date }}{% endif %}">
+                                            </div>
+                                            <div class="col-md-6 mb-3">
+                                                <label for="toDate" class="form-label">To Date</label>
+                                                <input type="date" id="toDate" name="to_date" class="form-control"
+                                                       value="{% if historical_settings and historical_settings.to_date %}{{ historical_settings.to_date }}{% endif %}">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Download Behavior -->
+                                    <div class="mb-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="continuousDownload" name="continuous_download"
+                                                   {% if historical_settings and historical_settings.continuous_download %}checked{% endif %}>
+                                            <label class="form-check-label" for="continuousDownload">
+                                                Enable continuous background downloads
+                                            </label>
+                                        </div>
+                                        <small class="form-text text-muted">
+                                            Automatically download new data for existing stocks in the background.
+                                        </small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="autoDownloadNewStocks" name="auto_download_new_stocks"
+                                                   {% if historical_settings and historical_settings.auto_download_new_stocks %}checked{% endif %}>
+                                            <label class="form-check-label" for="autoDownloadNewStocks">
+                                                Auto-download data for newly added stocks
+                                            </label>
+                                        </div>
+                                        <small class="form-text text-muted">
+                                            Automatically fetch historical data when new stocks are added to your watchlist.
+                                        </small>
+                                    </div>
+
+                                    <div class="mt-4">
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="bi bi-save me-2"></i>Save Settings
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+
+                        <!-- Data Management -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="bi bi-database me-2"></i>Data Management
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <p class="text-muted mb-3">
+                                    Manage your stored historical data. Warning: These actions cannot be undone.
+                                </p>
+
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <div class="p-3 bg-light rounded">
+                                            <h6 class="mb-2">Storage Usage</h6>
+                                            <p class="mb-0">
+                                                <strong class="text-primary" id="storageSize">Calculating...</strong>
+                                            </p>
+                                            <small class="text-muted">Total historical data stored</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <div class="p-3 bg-light rounded">
+                                            <h6 class="mb-2">Data Points</h6>
+                                            <p class="mb-0">
+                                                <strong class="text-primary" id="dataPoints">0</strong>
+                                            </p>
+                                            <small class="text-muted">Total candles stored</small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#clearDataModal">
+                                    <i class="bi bi-trash me-2"></i>Clear All Historical Data
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- About Tab -->
                     <div class="tab-pane fade {{ 'show active' if active_tab == 'about' else '' }}"
                          id="about"
@@ -304,4 +628,221 @@
         </div>
     </div>
 </div>
+
+<!-- Clear Historical Data Confirmation Modal -->
+<div class="modal fade" id="clearDataModal" tabindex="-1" aria-labelledby="clearDataModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="clearDataModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>Clear All Historical Data
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Warning:</strong> This action cannot be undone!
+                </div>
+                <p>You are about to delete <strong>all historical data</strong> from the database. This includes:</p>
+                <ul>
+                    <li>All historical candle data for all stocks</li>
+                    <li>All historical price information</li>
+                    <li>All downloaded market data</li>
+                </ul>
+                <p class="mb-0">Are you sure you want to proceed?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-2"></i>Cancel
+                </button>
+                <form action="{{ url_for('settings.clear_historical_data') }}" method="POST" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash me-2"></i>Yes, Clear All Data
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Token validation functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        // Historical Data Settings - Date Range Toggle
+        const datePresetSelect = document.getElementById('datePreset');
+        const customDateRange = document.getElementById('customDateRange');
+        const fromDateInput = document.getElementById('fromDate');
+        const toDateInput = document.getElementById('toDate');
+
+        if (datePresetSelect && customDateRange) {
+            // Function to toggle custom date range visibility
+            function toggleCustomDateRange() {
+                if (datePresetSelect.value === 'custom') {
+                    customDateRange.style.display = 'block';
+                    fromDateInput.required = true;
+                    toDateInput.required = true;
+                } else {
+                    customDateRange.style.display = 'none';
+                    fromDateInput.required = false;
+                    toDateInput.required = false;
+                }
+            }
+
+            // Initialize on page load
+            toggleCustomDateRange();
+
+            // Update when preset changes
+            datePresetSelect.addEventListener('change', toggleCustomDateRange);
+        }
+
+        // Historical Data Settings - Form Submission
+        const historicalForm = document.getElementById('historicalDataForm');
+        if (historicalForm) {
+            historicalForm.addEventListener('submit', function(e) {
+                // Validate custom date range if selected
+                if (datePresetSelect.value === 'custom') {
+                    const fromDate = new Date(fromDateInput.value);
+                    const toDate = new Date(toDateInput.value);
+
+                    if (fromDate > toDate) {
+                        e.preventDefault();
+                        alert('From Date must be before To Date');
+                        return false;
+                    }
+
+                    const today = new Date();
+                    if (toDate > today) {
+                        e.preventDefault();
+                        alert('To Date cannot be in the future');
+                        return false;
+                    }
+                }
+            });
+        }
+
+        const validateBtn = document.getElementById('validateTokenBtn');
+        const resultDiv = document.getElementById('validationResult');
+
+        if (validateBtn) {
+            validateBtn.addEventListener('click', function() {
+                // Disable button and show loading
+                validateBtn.disabled = true;
+                validateBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Validating...';
+
+                // Make AJAX request
+                fetch('{{ url_for("settings.validate_kite_token") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Show result
+                    resultDiv.style.display = 'block';
+
+                    if (data.valid) {
+                        // Token is valid - show profile info
+                        resultDiv.innerHTML = `
+                            <div class="card border-success">
+                                <div class="card-header bg-success text-white">
+                                    <h5 class="card-title mb-0">
+                                        <i class="bi bi-check-circle-fill me-2"></i>Token Valid
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <p class="text-success mb-3">
+                                        <strong>Your Kite access token is valid!</strong>
+                                    </p>
+                                    <h6>Profile Information:</h6>
+                                    <table class="table table-sm">
+                                        <tr>
+                                            <td class="fw-bold" style="width: 200px;">User ID:</td>
+                                            <td>${data.profile.user_id}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">Name:</td>
+                                            <td>${data.profile.user_name}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">Short Name:</td>
+                                            <td>${data.profile.user_shortname}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">Email:</td>
+                                            <td>${data.profile.email}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">Broker:</td>
+                                            <td>${data.profile.broker}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">Products:</td>
+                                            <td>${data.profile.products.join(', ')}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">Exchanges:</td>
+                                            <td>${data.profile.exchanges.join(', ')}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">Token Expires:</td>
+                                            <td>${data.expires_at}</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        // Token is invalid - show error
+                        resultDiv.innerHTML = `
+                            <div class="alert alert-danger alert-dismissible fade show">
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                <h5 class="alert-heading">
+                                    <i class="bi bi-x-circle-fill me-2"></i>Token Invalid or Expired
+                                </h5>
+                                <p class="mb-2">Your Kite access token is not valid. This could mean:</p>
+                                <ul class="mb-2">
+                                    <li>The token has expired (tokens expire daily at 7:30 AM IST)</li>
+                                    <li>The token was manually entered incorrectly</li>
+                                    <li>The token has been revoked</li>
+                                </ul>
+                                <hr>
+                                <p class="mb-0"><strong>Error:</strong> ${data.error}</p>
+                                <a href="{{ url_for('kite.connect') }}" class="btn btn-warning mt-3">
+                                    <i class="bi bi-arrow-clockwise me-2"></i>Reconnect to Kite
+                                </a>
+                            </div>
+                        `;
+                    }
+
+                    // Re-enable button
+                    validateBtn.disabled = false;
+                    validateBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Validate Token';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    resultDiv.style.display = 'block';
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-danger alert-dismissible fade show">
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            <h5 class="alert-heading">
+                                <i class="bi bi-exclamation-triangle-fill me-2"></i>Validation Error
+                            </h5>
+                            <p class="mb-0">Failed to validate token. Please try again.</p>
+                        </div>
+                    `;
+
+                    // Re-enable button
+                    validateBtn.disabled = false;
+                    validateBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Validate Token';
+                });
+            });
+        }
+    });
+</script>
 {% endblock %}

@@ -31,6 +31,8 @@ class User(UserMixin, db.Model):
     orders = db.relationship('Order', back_populates='user', lazy='dynamic', cascade='all, delete-orphan')
     positions = db.relationship('Position', back_populates='user', lazy='dynamic', cascade='all, delete-orphan')
     scan_results = db.relationship('ScanResult', back_populates='user', lazy='dynamic', cascade='all, delete-orphan')
+    backtest_strategies = db.relationship('BacktestStrategy', back_populates='user', lazy='dynamic', cascade='all, delete-orphan')
+    backtest_results = db.relationship('BacktestResult', back_populates='user', lazy='dynamic', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<User {self.username}>'
@@ -66,6 +68,101 @@ class User(UserMixin, db.Model):
         return datetime.utcnow() < self.kite_access_token_expires
 
 
+class Sector(db.Model):
+    """Model for sector/industry classification"""
+
+    __tablename__ = 'sectors'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    description = db.Column(db.Text, nullable=True)
+    icon = db.Column(db.String(50), nullable=True)  # Bootstrap icon class
+    color = db.Column(db.String(20), nullable=True)  # Color for visualization
+    is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    display_order = db.Column(db.Integer, default=0, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    sub_sectors = db.relationship('SubSector', back_populates='sector', lazy='dynamic',
+                                  cascade='all, delete-orphan', order_by='SubSector.display_order')
+
+    def __repr__(self):
+        return f'<Sector {self.name}>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'icon': self.icon,
+            'color': self.color,
+            'is_active': self.is_active,
+            'display_order': self.display_order,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'sub_sectors_count': self.sub_sectors.count()
+        }
+
+
+class SubSector(db.Model):
+    """Model for sub-sector classification within sectors"""
+
+    __tablename__ = 'sub_sectors'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, index=True)
+    sector_id = db.Column(db.Integer, db.ForeignKey('sectors.id'), nullable=False, index=True)
+    description = db.Column(db.Text, nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    display_order = db.Column(db.Integer, default=0, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    sector = db.relationship('Sector', back_populates='sub_sectors')
+    instruments = db.relationship('Instrument', back_populates='sub_sector_obj', lazy='dynamic')
+
+    # Unique constraint: sub-sector name must be unique within a sector
+    __table_args__ = (
+        db.UniqueConstraint('sector_id', 'name', name='uq_sector_subsector'),
+    )
+
+    def __repr__(self):
+        return f'<SubSector {self.name} in {self.sector.name if self.sector else "N/A"}>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'name': self.name,
+            'sector_id': self.sector_id,
+            'sector_name': self.sector.name if self.sector else None,
+            'description': self.description,
+            'is_active': self.is_active,
+            'display_order': self.display_order,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'instruments_count': self.instruments.filter_by(is_nifty500=True).count()
+        }
+
+
+class Nifty500List(db.Model):
+    """Model for storing NIFTY 500 stock symbols"""
+
+    __tablename__ = 'nifty500_list'
+
+    id = db.Column(db.Integer, primary_key=True)
+    symbol = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    added_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Nifty500 {self.symbol}>'
+
+
 class Instrument(db.Model):
     """Model for storing instrument/stock data with custom sector mapping"""
 
@@ -74,7 +171,7 @@ class Instrument(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     instrument_token = db.Column(db.Integer, unique=True, nullable=False, index=True)
     exchange_token = db.Column(db.Integer, nullable=True)
-    tradingsymbol = db.Column(db.String(50), nullable=False, index=True)
+    tradingsymbol = db.Column(db.String(50), unique=True, nullable=False, index=True)
     name = db.Column(db.String(200), nullable=True)
     last_price = db.Column(db.Float, default=0.0)
     expiry = db.Column(db.Date, nullable=True)
@@ -86,15 +183,23 @@ class Instrument(db.Model):
     exchange = db.Column(db.String(10), nullable=False)
 
     # Custom sector/industry classification
-    sector = db.Column(db.String(100), nullable=True, index=True)
-    sub_sector = db.Column(db.String(100), nullable=True, index=True)
+    # DEPRECATED: These fields are kept for backward compatibility during migration
+    sector = db.Column(db.String(100), nullable=True, index=True)  # DEPRECATED - use sub_sector_obj.sector
+    sub_sector = db.Column(db.String(100), nullable=True, index=True)  # DEPRECATED - use sub_sector_obj
     custom_tags = db.Column(db.Text, nullable=True)  # JSON string for custom tags
+
+    # New relational sub-sector reference
+    sub_sector_id = db.Column(db.Integer, db.ForeignKey('sub_sectors.id'), nullable=True, index=True)
+
+    # NIFTY 500 flag
+    is_nifty500 = db.Column(db.Boolean, default=False, nullable=False, index=True)
 
     # Timestamps
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relationships
+    sub_sector_obj = db.relationship('SubSector', back_populates='instruments')
     watchlist_items = db.relationship('WatchlistItem', back_populates='instrument', cascade='all, delete-orphan')
     orders = db.relationship('Order', back_populates='instrument')
     positions = db.relationship('Position', back_populates='instrument')
@@ -308,6 +413,104 @@ class MarketQuote(db.Model):
 
     def __repr__(self):
         return f'<MarketQuote {self.instrument_id} @ {self.last_price}>'
+
+
+class BacktestStrategy(db.Model):
+    """Backtest strategies configuration"""
+
+    __tablename__ = 'backtest_strategies'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    strategy_code = db.Column(db.Text, nullable=True)  # Python code or JSON config
+    parameters = db.Column(db.Text, nullable=True)  # JSON string for parameters
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = db.relationship('User', back_populates='backtest_strategies')
+    results = db.relationship('BacktestResult', back_populates='strategy', cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<BacktestStrategy {self.name}>'
+
+
+class BacktestResult(db.Model):
+    """Results from backtest runs"""
+
+    __tablename__ = 'backtest_results'
+
+    id = db.Column(db.Integer, primary_key=True)
+    strategy_id = db.Column(db.Integer, db.ForeignKey('backtest_strategies.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    instrument_token = db.Column(db.Integer, nullable=False)
+    tradingsymbol = db.Column(db.String(50), nullable=False)
+
+    # Backtest parameters
+    start_date = db.Column(db.Date, nullable=False)
+    end_date = db.Column(db.Date, nullable=False)
+    initial_capital = db.Column(db.Float, nullable=False)
+    commission = db.Column(db.Float, default=0.0)
+
+    # Results
+    final_capital = db.Column(db.Float, nullable=False)
+    total_return = db.Column(db.Float, nullable=False)  # Percentage
+    total_trades = db.Column(db.Integer, default=0)
+    winning_trades = db.Column(db.Integer, default=0)
+    losing_trades = db.Column(db.Integer, default=0)
+    win_rate = db.Column(db.Float, default=0.0)  # Percentage
+    max_drawdown = db.Column(db.Float, default=0.0)  # Percentage
+    sharpe_ratio = db.Column(db.Float, default=0.0)
+
+    # Detailed results
+    results_data = db.Column(db.Text, nullable=True)  # JSON string with trade log and equity curve
+
+    # Timestamps
+    executed_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user = db.relationship('User', back_populates='backtest_results')
+    strategy = db.relationship('BacktestStrategy', back_populates='results')
+
+    def __repr__(self):
+        return f'<BacktestResult {self.tradingsymbol} Return: {self.total_return}%>'
+
+
+class HistoricalDataSettings(db.Model):
+    """Model for storing user's historical data download preferences"""
+
+    __tablename__ = 'historical_data_settings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, unique=True, index=True)
+
+    # Rate limiting
+    requests_per_second = db.Column(db.Integer, default=1, nullable=False)  # 1-3 requests per second
+
+    # Date range settings
+    date_preset = db.Column(db.String(20), default='1month')  # '1day', '1week', '1month', '3months', '6months', '1year', '5years', '10years', 'custom'
+    from_date = db.Column(db.Date, nullable=True)  # Used when date_preset is 'custom'
+    to_date = db.Column(db.Date, nullable=True)  # Used when date_preset is 'custom'
+
+    # Candle interval
+    candle_interval = db.Column(db.String(20), default='day')  # 'minute', '3minute', '5minute', '10minute', '15minute', '30minute', '60minute', 'day'
+
+    # Download behavior
+    continuous_download = db.Column(db.Boolean, default=False)  # Enable continuous background downloads
+    auto_download_new_stocks = db.Column(db.Boolean, default=False)  # Auto-download when new stocks are added
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = db.relationship('User', backref=db.backref('historical_data_settings', uselist=False))
+
+    def __repr__(self):
+        return f'<HistoricalDataSettings User:{self.user_id} Interval:{self.candle_interval}>'
 
 
 @login_manager.user_loader
