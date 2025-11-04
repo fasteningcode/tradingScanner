@@ -104,6 +104,39 @@ class HistoricalDataDownloader:
                     self.task.started_at = datetime.utcnow()
                 db.session.commit()
 
+                # Test historical data API access before starting
+                current_app.logger.info(f"Task {self.task_id}: Testing historical data API access...")
+                try:
+                    test_instrument = Instrument.query.filter_by(
+                        exchange='NSE',
+                        instrument_type='EQ'
+                    ).first()
+
+                    if test_instrument:
+                        from datetime import timedelta
+                        test_date = datetime.now() - timedelta(days=1)
+                        self.kite.historical_data(
+                            instrument_token=test_instrument.instrument_token,
+                            from_date=test_date,
+                            to_date=test_date,
+                            interval='day'
+                        )
+                        current_app.logger.info(f"Task {self.task_id}: Historical data API test passed")
+                except Exception as e:
+                    if "invalid token" in str(e).lower():
+                        raise Exception(
+                            "Historical Data API access denied. Your Kite Connect app doesn't have "
+                            "permission to access historical data. Please:\n"
+                            "1. Go to https://developers.kite.trade/apps\n"
+                            "2. Check your app settings\n"
+                            "3. Ensure 'Historical Data' permission is enabled\n"
+                            "4. Subscribe to Historical Data API if needed\n"
+                            "5. Reconnect your Kite account after fixing permissions"
+                        )
+                    else:
+                        current_app.logger.warning(f"Task {self.task_id}: Historical data API test failed: {str(e)}")
+                        # Continue anyway - might be a transient error
+
                 # Get list of stocks to download
                 stocks = self._get_stocks_to_download()
                 self.task.total_stocks = len(stocks)
@@ -237,8 +270,23 @@ class HistoricalDataDownloader:
                         time.sleep(1.0 / self.task.requests_per_second)
 
                 except Exception as e:
-                    current_app.logger.warning(f"Task {self.task_id}: Error downloading chunk {chunk_from} to {chunk_to} for {instrument.tradingsymbol}: {str(e)}")
-                    # Continue with next chunk
+                    error_msg = str(e)
+                    current_app.logger.warning(f"Task {self.task_id}: Error downloading chunk {chunk_from} to {chunk_to} for {instrument.tradingsymbol}: {error_msg}")
+
+                    # Check if this is a historical data permissions error
+                    if "invalid token" in error_msg.lower():
+                        # This is a critical error - stop the entire task
+                        raise Exception(
+                            "Historical Data API access denied. Your Kite Connect app doesn't have "
+                            "permission to access historical data. Please:\n"
+                            "1. Go to https://developers.kite.trade/apps\n"
+                            "2. Check your app settings\n"
+                            "3. Ensure 'Historical Data' permission is enabled\n"
+                            "4. Subscribe to Historical Data API if needed\n"
+                            "5. Reconnect your Kite account"
+                        )
+
+                    # Continue with next chunk for other errors
                     continue
 
             if not all_candles:
