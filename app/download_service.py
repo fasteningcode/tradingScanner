@@ -37,9 +37,13 @@ class HistoricalDataDownloader:
         self.user = None
         self.kite = None
         self.should_stop = False
+        self.app = None  # Will store Flask app instance
 
     def start_download(self):
         """Start the download process in a background thread"""
+        # Store Flask app instance for background thread
+        self.app = current_app._get_current_object()
+
         # Load task from database
         self.task = DownloadTask.query.get(self.task_id)
         if not self.task:
@@ -90,66 +94,68 @@ class HistoricalDataDownloader:
 
     def _download_worker(self):
         """Main worker function that runs in background thread"""
-        try:
-            # Update task status to running
-            self.task.status = 'running'
-            if not self.task.started_at:
-                self.task.started_at = datetime.utcnow()
-            db.session.commit()
-
-            # Get list of stocks to download
-            stocks = self._get_stocks_to_download()
-            self.task.total_stocks = len(stocks)
-            db.session.commit()
-
-            current_app.logger.info(f"Task {self.task_id}: Downloading {len(stocks)} stocks")
-
-            # Process each stock
-            for i, instrument in enumerate(stocks):
-                if self.should_stop:
-                    current_app.logger.info(f"Task {self.task_id}: Stopped at stock {i}/{len(stocks)}")
-                    break
-
-                # Update current stock
-                self.task.current_stock_symbol = instrument.tradingsymbol
-                self.task.current_stock_id = instrument.id
+        # Run within Flask app context
+        with self.app.app_context():
+            try:
+                # Update task status to running
+                self.task.status = 'running'
+                if not self.task.started_at:
+                    self.task.started_at = datetime.utcnow()
                 db.session.commit()
 
-                # Download data for this stock
-                try:
-                    self._download_stock_data(instrument)
-                    self.task.completed_stocks += 1
-                except Exception as e:
-                    current_app.logger.error(f"Task {self.task_id}: Error downloading {instrument.tradingsymbol}: {str(e)}")
-                    self.task.failed_stocks += 1
-                    self.task.error_count += 1
-
-                # Update progress
-                self.task.progress_percentage = (self.task.completed_stocks + self.task.failed_stocks + self.task.skipped_stocks) / self.task.total_stocks * 100
+                # Get list of stocks to download
+                stocks = self._get_stocks_to_download()
+                self.task.total_stocks = len(stocks)
                 db.session.commit()
 
-                # Apply rate limiting
-                self._apply_rate_limit()
+                current_app.logger.info(f"Task {self.task_id}: Downloading {len(stocks)} stocks")
 
-            # Mark task as completed if not stopped
-            if not self.should_stop:
-                self.task.status = 'completed'
+                # Process each stock
+                for i, instrument in enumerate(stocks):
+                    if self.should_stop:
+                        current_app.logger.info(f"Task {self.task_id}: Stopped at stock {i}/{len(stocks)}")
+                        break
+
+                    # Update current stock
+                    self.task.current_stock_symbol = instrument.tradingsymbol
+                    self.task.current_stock_id = instrument.id
+                    db.session.commit()
+
+                    # Download data for this stock
+                    try:
+                        self._download_stock_data(instrument)
+                        self.task.completed_stocks += 1
+                    except Exception as e:
+                        current_app.logger.error(f"Task {self.task_id}: Error downloading {instrument.tradingsymbol}: {str(e)}")
+                        self.task.failed_stocks += 1
+                        self.task.error_count += 1
+
+                    # Update progress
+                    self.task.progress_percentage = (self.task.completed_stocks + self.task.failed_stocks + self.task.skipped_stocks) / self.task.total_stocks * 100
+                    db.session.commit()
+
+                    # Apply rate limiting
+                    self._apply_rate_limit()
+
+                # Mark task as completed if not stopped
+                if not self.should_stop:
+                    self.task.status = 'completed'
+                    self.task.completed_at = datetime.utcnow()
+                    self.task.progress_percentage = 100.0
+                    db.session.commit()
+                    current_app.logger.info(f"Task {self.task_id}: Completed successfully")
+
+            except Exception as e:
+                current_app.logger.error(f"Task {self.task_id}: Fatal error: {str(e)}")
+                self.task.status = 'failed'
+                self.task.error_message = str(e)
                 self.task.completed_at = datetime.utcnow()
-                self.task.progress_percentage = 100.0
                 db.session.commit()
-                current_app.logger.info(f"Task {self.task_id}: Completed successfully")
 
-        except Exception as e:
-            current_app.logger.error(f"Task {self.task_id}: Fatal error: {str(e)}")
-            self.task.status = 'failed'
-            self.task.error_message = str(e)
-            self.task.completed_at = datetime.utcnow()
-            db.session.commit()
-
-        finally:
-            # Remove from active downloads
-            if self.task_id in active_downloads:
-                del active_downloads[self.task_id]
+            finally:
+                # Remove from active downloads
+                if self.task_id in active_downloads:
+                    del active_downloads[self.task_id]
 
     def _get_stocks_to_download(self) -> List[Instrument]:
         """
