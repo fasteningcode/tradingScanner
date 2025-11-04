@@ -687,32 +687,17 @@ def stock_coverage():
             page=page, per_page=per_page, error_out=False
         )
 
-        # Check which stocks have historical data
+        # Check which stocks have historical data (JSON schema)
         stocks_data = []
         for instrument in pagination.items:
-            has_data = HistoricalData.query.filter_by(
-                instrument_id=instrument.id
-            ).first() is not None
+            hist_data = HistoricalData.query.filter_by(
+                tradingsymbol=instrument.tradingsymbol
+            ).first()
 
             # Get record count and date range if has data
-            record_count = 0
-            earliest_date = None
-            latest_date = None
-
-            if has_data:
-                record_count = HistoricalData.query.filter_by(
-                    instrument_id=instrument.id
-                ).count()
-
-                earliest = db.session.query(db.func.min(HistoricalData.timestamp)).filter_by(
-                    instrument_id=instrument.id
-                ).scalar()
-                latest = db.session.query(db.func.max(HistoricalData.timestamp)).filter_by(
-                    instrument_id=instrument.id
-                ).scalar()
-
-                earliest_date = earliest.isoformat() if earliest else None
-                latest_date = latest.isoformat() if latest else None
+            has_data = hist_data is not None
+            record_count = hist_data.get_candle_count() if hist_data else 0
+            earliest_date, latest_date = hist_data.get_date_range() if hist_data else (None, None)
 
             stocks_data.append({
                 'id': instrument.id,

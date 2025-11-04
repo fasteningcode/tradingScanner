@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card card-modern shadow-sm">
+            <div class="card-header bg-gradient-primary text-white">
+                <h4 class="card-title mb-0">
+                    <i class="bi bi-pencil me-2"></i>Edit Watchlist
+                </h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('watchlist.edit', watchlist_id=watchlist.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <div class="mb-4">
+                        <label for="name" class="form-label">
+                            Watchlist Name <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="name" name="name"
+                               value="{{ watchlist.name }}"
+                               placeholder="e.g., Tech Stocks, Blue Chips, Swing Trading"
+                               required maxlength="100">
+                        <small class="form-text text-muted">
+                            Choose a descriptive name for your watchlist
+                        </small>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="description" class="form-label">
+                            Description <span class="text-muted">(Optional)</span>
+                        </label>
+                        <textarea class="form-control" id="description" name="description"
+                                  rows="3" maxlength="500"
+                                  placeholder="Add notes about this watchlist...">{{ watchlist.description or '' }}</textarea>
+                        <small class="form-text text-muted">
+                            Describe the purpose or strategy for this watchlist
+                        </small>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Created:</strong> {{ watchlist.created_at.strftime('%B %d, %Y at %I:%M %p') }}
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('watchlist.view', watchlist_id=watchlist.id) }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle me-2"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle me-2"></i>Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

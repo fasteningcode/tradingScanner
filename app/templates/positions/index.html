@@ -1,0 +1,421 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="h2 mb-1">
+                    <i class="bi bi-briefcase text-primary"></i> Positions & Holdings
+                </h1>
+                <p class="text-muted mb-0">Track your portfolio and P&L</p>
+            </div>
+            <div>
+                {% if current_user.kite_connected %}
+                <button class="btn btn-outline-secondary" id="refreshBtn">
+                    <i class="bi bi-arrow-repeat me-2"></i>Refresh
+                </button>
+                {% else %}
+                <a href="{{ url_for('kite.connect') }}" class="btn btn-primary">
+                    <i class="bi bi-link-45deg me-2"></i>Connect to Kite
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if not current_user.kite_connected %}
+<div class="alert alert-warning mb-4">
+    <i class="bi bi-exclamation-triangle me-2"></i>
+    Please connect to Zerodha Kite to view your positions and holdings.
+    <a href="{{ url_for('kite.connect') }}" class="alert-link">Connect Now</a>
+</div>
+{% else %}
+
+<!-- Summary Cards -->
+<div class="row mb-4" id="summaryCards">
+    <div class="col-md-3">
+        <div class="card stat-card gradient-primary text-white shadow-sm">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-white opacity-75">Day P&L</h6>
+                <h2 class="card-title mb-0 fw-bold" id="dayPnl">₹0.00</h2>
+                <small class="opacity-75"><span id="dayCount">0</span> positions</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card gradient-success text-white shadow-sm">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-white opacity-75">Net P&L</h6>
+                <h2 class="card-title mb-0 fw-bold" id="netPnl">₹0.00</h2>
+                <small class="opacity-75"><span id="netCount">0</span> positions</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card gradient-info text-white shadow-sm">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-white opacity-75">Holdings P&L</h6>
+                <h2 class="card-title mb-0 fw-bold" id="holdingsPnl">₹0.00</h2>
+                <small class="opacity-75"><span id="holdingsPnlPercent">0%</span></small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card gradient-warning text-white shadow-sm">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-white opacity-75">Holdings</h6>
+                <h2 class="card-title mb-0 fw-bold" id="holdingsCount">0</h2>
+                <small class="opacity-75">Long-term</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading State -->
+<div id="loadingState" class="card card-modern shadow-sm">
+    <div class="card-body text-center py-5">
+        <div class="spinner-border text-primary mb-3" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="text-muted mb-0">Loading positions...</p>
+    </div>
+</div>
+
+<!-- Positions Tabs -->
+<div id="positionsContent" style="display: none;">
+    <ul class="nav nav-tabs mb-4" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active" id="day-tab" data-bs-toggle="tab" data-bs-target="#day" type="button">
+                <i class="bi bi-calendar-day me-2"></i>Day Positions
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="net-tab" data-bs-toggle="tab" data-bs-target="#net" type="button">
+                <i class="bi bi-diagram-3 me-2"></i>Net Positions
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="holdings-tab" data-bs-toggle="tab" data-bs-target="#holdings" type="button">
+                <i class="bi bi-bank me-2"></i>Holdings
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content">
+        <!-- Day Positions -->
+        <div class="tab-pane fade show active" id="day" role="tabpanel">
+            <div class="card card-modern shadow-sm">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-calendar-day me-2"></i>Day Positions
+                    </h5>
+                </div>
+                <div class="card-body p-0" id="dayPositionsBody">
+                    <!-- Day positions table -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Net Positions -->
+        <div class="tab-pane fade" id="net" role="tabpanel">
+            <div class="card card-modern shadow-sm">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-diagram-3 me-2"></i>Net Positions
+                    </h5>
+                </div>
+                <div class="card-body p-0" id="netPositionsBody">
+                    <!-- Net positions table -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Holdings -->
+        <div class="tab-pane fade" id="holdings" role="tabpanel">
+            <div class="card card-modern shadow-sm">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-bank me-2"></i>Holdings
+                        </h5>
+                        <div>
+                            <span class="badge bg-secondary me-2">Investment: <span id="totalInvestment">₹0</span></span>
+                            <span class="badge bg-primary">Value: <span id="totalValue">₹0</span></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0" id="holdingsBody">
+                    <!-- Holdings table -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Error State -->
+<div id="errorState" style="display: none;" class="card card-modern shadow-sm">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-exclamation-triangle fs-1 text-warning mb-3"></i>
+        <h5 class="text-muted">Failed to load positions</h5>
+        <p class="text-muted mb-3" id="errorMessage">An error occurred while fetching positions.</p>
+        <button class="btn btn-primary" id="retryBtn">
+            <i class="bi bi-arrow-repeat me-2"></i>Retry
+        </button>
+    </div>
+</div>
+
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const kiteConnected = {{ 'true' if current_user.kite_connected else 'false' }};
+
+    if (kiteConnected) {
+        loadPositions();
+        loadHoldings();
+
+        // Auto-refresh every 10 seconds
+        setInterval(() => {
+            loadPositions();
+            loadHoldings();
+        }, 10000);
+    }
+
+    // Refresh button
+    document.getElementById('refreshBtn')?.addEventListener('click', function() {
+        loadPositions();
+        loadHoldings();
+    });
+
+    document.getElementById('retryBtn')?.addEventListener('click', function() {
+        loadPositions();
+        loadHoldings();
+    });
+
+    function loadPositions() {
+        showState('loading');
+
+        fetch('{{ url_for("positions.get_positions") }}')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayPositions(data);
+                    showState('positions');
+                } else {
+                    showError(data.error || 'Failed to load positions');
+                }
+            })
+            .catch(error => {
+                console.error('Positions error:', error);
+                showError('Network error. Please check your connection.');
+            });
+    }
+
+    function loadHoldings() {
+        fetch('{{ url_for("positions.get_holdings") }}')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayHoldingsStats(data);
+                    displayHoldings(data.holdings);
+                }
+            })
+            .catch(error => console.error('Holdings error:', error));
+    }
+
+    function displayPositions(data) {
+        // Update summary cards
+        document.getElementById('dayPnl').textContent = formatCurrency(data.day_pnl);
+        document.getElementById('dayPnl').className = `card-title mb-0 fw-bold ${data.day_pnl >= 0 ? 'text-success' : 'text-danger'}`;
+        document.getElementById('dayCount').textContent = data.day_count;
+
+        document.getElementById('netPnl').textContent = formatCurrency(data.net_pnl);
+        document.getElementById('netPnl').className = `card-title mb-0 fw-bold ${data.net_pnl >= 0 ? 'text-success' : 'text-danger'}`;
+        document.getElementById('netCount').textContent = data.net_count;
+
+        // Display positions tables
+        displayPositionsTable('dayPositionsBody', data.day_positions);
+        displayPositionsTable('netPositionsBody', data.net_positions);
+    }
+
+    function displayPositionsTable(containerId, positions) {
+        const container = document.getElementById(containerId);
+
+        // Filter out zero quantity positions
+        const activePositions = positions.filter(p => p.quantity !== 0);
+
+        if (activePositions.length === 0) {
+            container.innerHTML = '<div class="text-center py-5 text-muted">No active positions</div>';
+            return;
+        }
+
+        let html = `
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Product</th>
+                            <th class="text-end">Qty</th>
+                            <th class="text-end">Avg Price</th>
+                            <th class="text-end">LTP</th>
+                            <th class="text-end">P&L</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        activePositions.forEach(pos => {
+            const pnlClass = pos.pnl >= 0 ? 'text-success' : 'text-danger';
+            const typeClass = pos.quantity > 0 ? 'text-success' : 'text-danger';
+
+            html += `
+                <tr>
+                    <td>
+                        <strong>${pos.tradingsymbol}</strong><br>
+                        <small class="text-muted">${pos.exchange}</small>
+                    </td>
+                    <td><span class="badge bg-secondary">${pos.product}</span></td>
+                    <td class="text-end ${typeClass}"><strong>${pos.quantity}</strong></td>
+                    <td class="text-end">₹${pos.average_price.toFixed(2)}</td>
+                    <td class="text-end">₹${pos.last_price.toFixed(2)}</td>
+                    <td class="text-end ${pnlClass}"><strong>₹${pos.pnl.toFixed(2)}</strong></td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-danger exit-btn"
+                                data-symbol="${pos.tradingsymbol}"
+                                data-exchange="${pos.exchange}"
+                                data-quantity="${Math.abs(pos.quantity)}"
+                                data-product="${pos.product}"
+                                data-type="${pos.quantity > 0 ? 'BUY' : 'SELL'}">
+                            <i class="bi bi-box-arrow-right"></i> Exit
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+
+        // Attach exit handlers
+        container.querySelectorAll('.exit-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                exitPosition(this.dataset);
+            });
+        });
+    }
+
+    function displayHoldingsStats(data) {
+        document.getElementById('holdingsPnl').textContent = formatCurrency(data.total_pnl);
+        document.getElementById('holdingsPnl').className = `card-title mb-0 fw-bold ${data.total_pnl >= 0 ? 'text-success' : 'text-danger'}`;
+        document.getElementById('holdingsPnlPercent').textContent = `${data.total_pnl_percent.toFixed(2)}%`;
+        document.getElementById('holdingsCount').textContent = data.count;
+        document.getElementById('totalInvestment').textContent = formatCurrency(data.total_investment);
+        document.getElementById('totalValue').textContent = formatCurrency(data.total_current_value);
+    }
+
+    function displayHoldings(holdings) {
+        const container = document.getElementById('holdingsBody');
+
+        if (holdings.length === 0) {
+            container.innerHTML = '<div class="text-center py-5 text-muted">No holdings found</div>';
+            return;
+        }
+
+        let html = `
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Symbol</th>
+                            <th class="text-end">Qty</th>
+                            <th class="text-end">Avg Price</th>
+                            <th class="text-end">LTP</th>
+                            <th class="text-end">Investment</th>
+                            <th class="text-end">Current Value</th>
+                            <th class="text-end">P&L</th>
+                            <th class="text-end">Returns</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        holdings.forEach(holding => {
+            const investment = holding.average_price * holding.quantity;
+            const currentValue = holding.last_price * holding.quantity;
+            const pnl = currentValue - investment;
+            const returns = (pnl / investment * 100);
+            const pnlClass = pnl >= 0 ? 'text-success' : 'text-danger';
+
+            html += `
+                <tr>
+                    <td>
+                        <strong>${holding.tradingsymbol}</strong><br>
+                        <small class="text-muted">${holding.exchange}</small>
+                    </td>
+                    <td class="text-end">${holding.quantity}</td>
+                    <td class="text-end">₹${holding.average_price.toFixed(2)}</td>
+                    <td class="text-end">₹${holding.last_price.toFixed(2)}</td>
+                    <td class="text-end">₹${investment.toFixed(2)}</td>
+                    <td class="text-end">₹${currentValue.toFixed(2)}</td>
+                    <td class="text-end ${pnlClass}"><strong>₹${pnl.toFixed(2)}</strong></td>
+                    <td class="text-end ${pnlClass}"><strong>${returns.toFixed(2)}%</strong></td>
+                </tr>
+            `;
+        });
+
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    }
+
+    function exitPosition(data) {
+        if (!confirm(`Exit position for ${data.symbol}?`)) return;
+
+        fetch(`/positions/api/exit/${data.symbol}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: JSON.stringify({
+                exchange: data.exchange,
+                transaction_type: data.type,
+                quantity: data.quantity,
+                product: data.product
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                loadPositions();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        });
+    }
+
+    function formatCurrency(value) {
+        return '₹' + value.toFixed(2);
+    }
+
+    function showState(state) {
+        document.getElementById('loadingState').style.display = state === 'loading' ? 'block' : 'none';
+        document.getElementById('positionsContent').style.display = state === 'positions' ? 'block' : 'none';
+        document.getElementById('errorState').style.display = state === 'error' ? 'block' : 'none';
+    }
+
+    function showError(message) {
+        document.getElementById('errorMessage').textContent = message;
+        showState('error');
+    }
+});
+</script>
+{% endblock %}

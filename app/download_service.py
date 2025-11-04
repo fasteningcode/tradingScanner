@@ -194,23 +194,21 @@ class HistoricalDataDownloader:
         db.session.commit()
 
         try:
-            # Check if data already exists
-            existing_count = HistoricalData.query.filter_by(
-                instrument_id=instrument.id,
+            # Check if data already exists (new JSON schema)
+            existing_data = HistoricalData.query.filter_by(
+                tradingsymbol=instrument.tradingsymbol,
                 interval=self.task.interval
-            ).filter(
-                HistoricalData.timestamp >= datetime.combine(self.task.from_date, datetime.min.time()),
-                HistoricalData.timestamp <= datetime.combine(self.task.to_date, datetime.max.time())
-            ).count()
+            ).first()
 
-            if existing_count > 0:
-                # Data already exists, skip
+            if existing_data:
+                # Data already exists, skip (for now - could merge later)
+                candle_count = existing_data.get_candle_count()
                 log.status = 'skipped'
-                log.records_downloaded = existing_count
+                log.records_downloaded = candle_count
                 log.completed_at = datetime.utcnow()
                 self.task.skipped_stocks += 1
                 db.session.commit()
-                current_app.logger.debug(f"Task {self.task_id}: Skipped {instrument.tradingsymbol} (already has {existing_count} records)")
+                current_app.logger.debug(f"Task {self.task_id}: Skipped {instrument.tradingsymbol} (already has {candle_count} candles)")
                 return
 
             # Download data from Kite
@@ -249,8 +247,8 @@ class HistoricalDataDownloader:
                 db.session.commit()
                 return
 
-            # Store candles in database (bulk insert)
-            self._store_candles(instrument.id, all_candles, self.task.interval)
+            # Store candles in database (JSON format)
+            self._store_candles(instrument.tradingsymbol, all_candles, self.task.interval)
 
             log.status = 'success'
             log.records_downloaded = len(all_candles)
@@ -302,53 +300,70 @@ class HistoricalDataDownloader:
 
         return chunks
 
-    def _store_candles(self, instrument_id: int, candles: List[Dict[str, Any]], interval: str):
+    def _store_candles(self, tradingsymbol: str, candles: List[Dict[str, Any]], interval: str):
         """
-        Store candles in database using bulk insert
+        Store candles in database as JSON (one row per stock per interval)
 
         Args:
-            instrument_id: ID of the instrument
+            tradingsymbol: Trading symbol of the instrument
             candles: List of candle dictionaries from Kite API
             interval: Candle interval
         """
-        historical_data_objects = []
+        import json
 
+        # Convert Kite API candles to our JSON format
+        candles_json = []
         for candle in candles:
             # Validate candle data
             if not all(key in candle for key in ['date', 'open', 'high', 'low', 'close']):
                 current_app.logger.warning(f"Invalid candle data: {candle}")
                 continue
 
-            # Create HistoricalData object
-            historical_data = HistoricalData(
-                instrument_id=instrument_id,
-                timestamp=candle['date'],
-                interval=interval,
-                open=candle['open'],
-                high=candle['high'],
-                low=candle['low'],
-                close=candle['close'],
-                volume=candle.get('volume', 0),
-                oi=candle.get('oi', 0)
-            )
-            historical_data_objects.append(historical_data)
+            # Format: {"date": "2024-01-01", "open": 100.0, "high": 105.0, "low": 99.0, "close": 103.0, "volume": 1000, "oi": 0}
+            candles_json.append({
+                'date': candle['date'].strftime('%Y-%m-%d') if hasattr(candle['date'], 'strftime') else str(candle['date']).split(' ')[0],
+                'open': float(candle['open']),
+                'high': float(candle['high']),
+                'low': float(candle['low']),
+                'close': float(candle['close']),
+                'volume': int(candle.get('volume', 0)),
+                'oi': int(candle.get('oi', 0))
+            })
 
-        # Bulk insert
-        if historical_data_objects:
-            try:
-                db.session.bulk_save_objects(historical_data_objects)
-                db.session.commit()
-            except Exception as e:
-                db.session.rollback()
-                # Try individual inserts as fallback
-                current_app.logger.warning(f"Bulk insert failed, trying individual inserts: {str(e)}")
-                for obj in historical_data_objects:
-                    try:
-                        db.session.merge(obj)  # Use merge to handle duplicates
-                        db.session.commit()
-                    except Exception as e2:
-                        db.session.rollback()
-                        current_app.logger.error(f"Failed to insert candle: {str(e2)}")
+        if not candles_json:
+            current_app.logger.warning(f"No valid candles to store for {tradingsymbol}")
+            return
+
+        try:
+            # Check if record exists
+            existing = HistoricalData.query.filter_by(
+                tradingsymbol=tradingsymbol,
+                interval=interval
+            ).first()
+
+            if existing:
+                # Replace entire JSON (as per user preference)
+                existing.set_candles(candles_json)
+                existing.last_downloaded = datetime.utcnow()
+            else:
+                # Create new record
+                new_data = HistoricalData(
+                    tradingsymbol=tradingsymbol,
+                    interval=interval,
+                    candlestick_data=json.dumps(candles_json),
+                    last_downloaded=datetime.utcnow(),
+                    created_on=datetime.utcnow(),
+                    updated_on=datetime.utcnow()
+                )
+                db.session.add(new_data)
+
+            db.session.commit()
+            current_app.logger.debug(f"Stored {len(candles_json)} candles for {tradingsymbol} ({interval})")
+
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Failed to store candles for {tradingsymbol}: {str(e)}")
+            raise
 
     def _apply_rate_limit(self):
         """Apply rate limiting based on task configuration"""
@@ -452,7 +467,7 @@ def get_active_task(user_id: int) -> Optional[DownloadTask]:
 
 def get_storage_stats(user_id: Optional[int] = None) -> Dict[str, Any]:
     """
-    Calculate storage statistics for historical data
+    Calculate storage statistics for historical data (JSON schema)
 
     Args:
         user_id: Optional user ID to filter by user's stocks
@@ -460,17 +475,26 @@ def get_storage_stats(user_id: Optional[int] = None) -> Dict[str, Any]:
     Returns:
         Dictionary with storage statistics
     """
-    # Get total record count
-    total_records = HistoricalData.query.count()
+    # Get all historical data records
+    all_data = HistoricalData.query.all()
 
-    # Get date range
-    earliest = db.session.query(db.func.min(HistoricalData.timestamp)).scalar()
-    latest = db.session.query(db.func.max(HistoricalData.timestamp)).scalar()
+    # Calculate total candles across all stocks
+    total_candles = sum(data.get_candle_count() for data in all_data)
 
     # Get unique stocks with data
-    stocks_with_data = db.session.query(
-        db.func.count(db.func.distinct(HistoricalData.instrument_id))
-    ).scalar()
+    stocks_with_data = len(all_data)
+
+    # Get date ranges
+    earliest_date = None
+    latest_date = None
+    for data in all_data:
+        early, late = data.get_date_range()
+        if early:
+            if not earliest_date or early < earliest_date:
+                earliest_date = early
+        if late:
+            if not latest_date or late > latest_date:
+                latest_date = late
 
     # Get total NIFTY 500 stocks
     total_nifty500 = Instrument.query.filter_by(
@@ -479,16 +503,16 @@ def get_storage_stats(user_id: Optional[int] = None) -> Dict[str, Any]:
         is_nifty500=True
     ).count()
 
-    # Estimate storage size (rough calculation)
-    # Each record is approximately 100 bytes (rough estimate)
-    estimated_size_mb = (total_records * 100) / (1024 * 1024)
+    # Calculate actual storage size
+    total_json_size = sum(len(data.candlestick_data) for data in all_data)
+    estimated_size_mb = total_json_size / (1024 * 1024)
 
     return {
-        'total_records': total_records,
+        'total_records': total_candles,  # Total candles
         'stocks_with_data': stocks_with_data,
         'total_stocks': total_nifty500,
         'coverage_percentage': round((stocks_with_data / total_nifty500 * 100), 2) if total_nifty500 > 0 else 0,
-        'earliest_date': earliest.isoformat() if earliest else None,
-        'latest_date': latest.isoformat() if latest else None,
+        'earliest_date': earliest_date,
+        'latest_date': latest_date,
         'estimated_size_mb': round(estimated_size_mb, 2)
     }

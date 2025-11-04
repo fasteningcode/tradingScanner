@@ -3,7 +3,7 @@ import io
 from datetime import datetime, date
 from flask import current_app
 from app import db
-from app.models import Instrument
+from app.models import Instrument, Nifty500List
 from app.kite_auth import get_kite_client
 
 
@@ -118,6 +118,14 @@ class InstrumentsManager:
 
             # Final commit
             db.session.commit()
+
+            # Auto-sync NIFTY 500 status after NSE instruments sync
+            if exchange == 'NSE':
+                try:
+                    nifty500_synced = InstrumentsManager._sync_nifty500_flags()
+                    current_app.logger.info(f'NIFTY 500 sync: {nifty500_synced} instruments marked')
+                except Exception as e:
+                    current_app.logger.warning(f'NIFTY 500 sync failed: {str(e)}')
 
             stats = {
                 'exchange': exchange,
@@ -345,4 +353,42 @@ class InstrumentsManager:
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f'Error in bulk sector update: {str(e)}')
+            raise
+
+    @staticmethod
+    def _sync_nifty500_flags():
+        """
+        Internal method to sync is_nifty500 flags based on Nifty500List
+        Called automatically after NSE instrument sync
+
+        Returns:
+            int: Number of instruments marked as NIFTY 500
+        """
+        try:
+            # Get all active NIFTY 500 symbols
+            nifty500_symbols = {entry.symbol for entry in Nifty500List.query.filter_by(is_active=True).all()}
+
+            if not nifty500_symbols:
+                current_app.logger.warning('No NIFTY 500 symbols found in database')
+                return 0
+
+            # Reset all instruments first
+            Instrument.query.update({'is_nifty500': False})
+
+            # Mark NIFTY 500 stocks (NSE, EQ type only)
+            marked_count = 0
+            for symbol in nifty500_symbols:
+                result = Instrument.query.filter_by(
+                    tradingsymbol=symbol,
+                    exchange='NSE',
+                    instrument_type='EQ'
+                ).update({'is_nifty500': True})
+                marked_count += result
+
+            db.session.commit()
+            return marked_count
+
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'Error syncing NIFTY 500 flags: {str(e)}')
             raise

@@ -37,20 +37,23 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add loading spinner to submit buttons
     const submitButtons = document.querySelectorAll('button[type="submit"]');
     submitButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            const form = this.closest('form');
-            if (form && form.checkValidity()) {
-                this.disabled = true;
-                const originalText = this.innerHTML;
-                this.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Loading...';
+        const form = button.closest('form');
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                // Only disable if form is valid
+                if (form.checkValidity()) {
+                    button.disabled = true;
+                    const originalText = button.innerHTML;
+                    button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Loading...';
 
-                // Re-enable after 3 seconds as a fallback
-                setTimeout(() => {
-                    this.disabled = false;
-                    this.innerHTML = originalText;
-                }, 3000);
-            }
-        });
+                    // Re-enable after 5 seconds as a fallback
+                    setTimeout(() => {
+                        button.disabled = false;
+                        button.innerHTML = originalText;
+                    }, 5000);
+                }
+            });
+        }
     });
 
     // Smooth scroll for anchor links

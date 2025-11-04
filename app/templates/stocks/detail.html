@@ -1,0 +1,542 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="h2 mb-1">
+                    <i class="bi bi-graph-up text-primary"></i> {{ instrument.tradingsymbol }}
+                </h1>
+                <p class="text-muted mb-0">{{ instrument.name or 'Stock Details' }}</p>
+            </div>
+            <div>
+                <a href="{{ url_for('stocks.index') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Stocks
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stock Info Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card glass-card h-100">
+            <div class="card-body">
+                <small class="text-muted d-block">Exchange</small>
+                <h4 class="mb-0"><span class="badge bg-info">{{ instrument.exchange }}</span></h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card glass-card h-100">
+            <div class="card-body">
+                <small class="text-muted d-block">Instrument Type</small>
+                <h4 class="mb-0"><span class="badge bg-secondary">{{ instrument.instrument_type }}</span></h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card glass-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <small class="text-muted">Sector</small>
+                    <button class="btn btn-sm btn-link text-primary p-0" data-bs-toggle="modal" data-bs-target="#editSectorModal" title="Edit Sector">
+                        <i class="bi bi-pencil-square"></i>
+                    </button>
+                </div>
+                {% if instrument.sub_sector_obj %}
+                    <h5 class="mb-0">{{ instrument.sub_sector_obj.sector.name }}</h5>
+                    <small class="text-muted">{{ instrument.sub_sector_obj.name }}</small>
+                {% else %}
+                    <h5 class="mb-0 text-muted">Not classified</h5>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card glass-card h-100">
+            <div class="card-body">
+                <small class="text-muted d-block">Lot Size</small>
+                <h5 class="mb-0">{{ instrument.lot_size }}</h5>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Live Quote -->
+{% if current_user.kite_connected %}
+<div class="card card-modern shadow-sm mb-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0">
+            <i class="bi bi-activity me-2"></i> Live Quote
+            <span class="badge bg-success ms-2" id="quoteStatus">Loading...</span>
+        </h5>
+    </div>
+    <div class="card-body">
+        <div id="quoteData" class="row g-3">
+            <div class="col-md-3">
+                <div class="p-3 glass-card text-center">
+                    <small class="text-muted d-block">Last Price</small>
+                    <h3 class="mb-0 text-primary" id="lastPrice">-</h3>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-3 glass-card text-center">
+                    <small class="text-muted d-block">Change</small>
+                    <h4 class="mb-0" id="change">-</h4>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-3 glass-card text-center">
+                    <small class="text-muted d-block">Open</small>
+                    <h5 class="mb-0" id="open">-</h5>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-3 glass-card text-center">
+                    <small class="text-muted d-block">Volume</small>
+                    <h5 class="mb-0" id="volume">-</h5>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-3 glass-card text-center">
+                    <small class="text-muted d-block">High</small>
+                    <h5 class="mb-0 text-success" id="high">-</h5>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-3 glass-card text-center">
+                    <small class="text-muted d-block">Low</small>
+                    <h5 class="mb-0 text-danger" id="low">-</h5>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-3 glass-card text-center">
+                    <small class="text-muted d-block">Prev. Close</small>
+                    <h5 class="mb-0" id="prevClose">-</h5>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-3 glass-card text-center">
+                    <small class="text-muted d-block">Avg. Price</small>
+                    <h5 class="mb-0" id="avgPrice">-</h5>
+                </div>
+            </div>
+        </div>
+        <div class="text-center mt-3">
+            <button class="btn btn-primary btn-sm" id="refreshQuote">
+                <i class="bi bi-arrow-clockwise me-2"></i>Refresh Quote
+            </button>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle me-2"></i>
+    Connect to Kite to view live quotes.
+    <a href="{{ url_for('kite.connect') }}" class="alert-link">Connect Now</a>
+</div>
+{% endif %}
+
+<!-- Stock Details -->
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card card-modern shadow-sm">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-info-circle me-2"></i> Instrument Details
+                </h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless">
+                    <tr>
+                        <td class="fw-bold" style="width: 200px;">Trading Symbol:</td>
+                        <td>{{ instrument.tradingsymbol }}</td>
+                    </tr>
+                    <tr>
+                        <td class="fw-bold">Company Name:</td>
+                        <td>{{ instrument.name or '-' }}</td>
+                    </tr>
+                    <tr>
+                        <td class="fw-bold">Instrument Token:</td>
+                        <td><code>{{ instrument.instrument_token }}</code></td>
+                    </tr>
+                    <tr>
+                        <td class="fw-bold">Exchange:</td>
+                        <td><span class="badge bg-info">{{ instrument.exchange }}</span></td>
+                    </tr>
+                    <tr>
+                        <td class="fw-bold">Segment:</td>
+                        <td>{{ instrument.segment }}</td>
+                    </tr>
+                    <tr>
+                        <td class="fw-bold">Instrument Type:</td>
+                        <td><span class="badge bg-secondary">{{ instrument.instrument_type }}</span></td>
+                    </tr>
+                    <tr>
+                        <td class="fw-bold">Sector:</td>
+                        <td>
+                            {% if instrument.sub_sector_obj %}
+                                {{ instrument.sub_sector_obj.sector.name }}
+                            {% else %}
+                                <span class="text-muted">Not classified</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="fw-bold">Sub Sector:</td>
+                        <td>
+                            {% if instrument.sub_sector_obj %}
+                                {{ instrument.sub_sector_obj.name }}
+                            {% else %}
+                                <span class="text-muted">Not assigned</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% if instrument.sector or instrument.sub_sector %}
+                    <tr>
+                        <td class="fw-bold">NSE Sector:</td>
+                        <td class="text-muted small">{{ instrument.sector or '-' }}</td>
+                    </tr>
+                    <tr>
+                        <td class="fw-bold">NSE Industry:</td>
+                        <td class="text-muted small">{{ instrument.sub_sector or '-' }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <td class="fw-bold">Lot Size:</td>
+                        <td>{{ instrument.lot_size }}</td>
+                    </tr>
+                    <tr>
+                        <td class="fw-bold">Tick Size:</td>
+                        <td>{{ instrument.tick_size }}</td>
+                    </tr>
+                    <tr>
+                        <td class="fw-bold">Last Updated:</td>
+                        <td>{{ instrument.last_updated.strftime('%B %d, %Y at %I:%M %p') if instrument.last_updated else '-' }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Quick Actions -->
+        <div class="card card-modern shadow-sm mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-lightning-fill me-2"></i> Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    {% if watchlists %}
+                    <button type="button" class="btn btn-outline-success btn-lg" data-bs-toggle="modal" data-bs-target="#addToWatchlistModal">
+                        <i class="bi bi-star me-2"></i>{% if in_watchlist %}In Watchlist{% else %}Add to Watchlist{% endif %}
+                    </button>
+                    {% endif %}
+                    <button type="button" class="btn btn-outline-primary btn-lg" onclick="alert('Place Order coming soon!');">
+                        <i class="bi bi-cart me-2"></i>Place Order
+                    </button>
+                    <button type="button" class="btn btn-outline-info btn-lg" onclick="alert('Technical Analysis coming soon!');">
+                        <i class="bi bi-graph-up me-2"></i>Technical Analysis
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart Placeholder -->
+        <div class="card glass-card shadow-sm">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-bar-chart-line fs-1 text-muted"></i>
+                <p class="text-muted mt-3 mb-0">Price Chart</p>
+                <small class="text-muted">Coming Soon</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add to Watchlist Modal -->
+{% if watchlists %}
+<div class="modal fade" id="addToWatchlistModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-star me-2"></i>Add to Watchlist</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="addToWatchlistForm">
+                <div class="modal-body">
+                    <input type="hidden" name="instrument_id" value="{{ instrument.id }}">
+                    <div class="mb-3">
+                        <label class="form-label">Stock Symbol</label>
+                        <input type="text" class="form-control" value="{{ instrument.tradingsymbol }}" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Select Watchlist</label>
+                        <select name="watchlist_id" class="form-select" required>
+                            <option value="">Choose watchlist...</option>
+                            {% for wl in watchlists %}
+                            <option value="{{ wl.id }}">{{ wl.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notes (Optional)</label>
+                        <textarea name="notes" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add to Watchlist</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Edit Sector Modal -->
+<div class="modal fade" id="editSectorModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('stocks.update_sector', symbol=instrument.tradingsymbol) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-pie-chart me-2"></i>Edit Sector Classification
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted mb-3">
+                        Update the sector classification for <strong>{{ instrument.tradingsymbol }}</strong>
+                    </p>
+
+                    <!-- Current Classification -->
+                    <div class="alert alert-info mb-3">
+                        <strong>Current Classification:</strong><br>
+                        {% if instrument.sub_sector_obj %}
+                            {{ instrument.sub_sector_obj.sector.name }} → {{ instrument.sub_sector_obj.name }}
+                        {% else %}
+                            <span class="text-muted">Not classified</span>
+                        {% endif %}
+                    </div>
+
+                    <!-- Sector Selection -->
+                    <div class="mb-3">
+                        <label for="sectorSelect" class="form-label">
+                            <i class="bi bi-pie-chart me-2"></i>Sector
+                        </label>
+                        <select id="sectorSelect" class="form-select" required>
+                            <option value="">Select Sector...</option>
+                            {% for sector in sectors %}
+                            <option value="{{ sector.id }}"
+                                {% if instrument.sub_sector_obj and instrument.sub_sector_obj.sector_id == sector.id %}selected{% endif %}>
+                                {{ sector.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Sub-Sector Selection -->
+                    <div class="mb-3">
+                        <label for="subSectorSelect" class="form-label">
+                            <i class="bi bi-diagram-3 me-2"></i>Sub-Sector
+                        </label>
+                        <select id="subSectorSelect" name="sub_sector_id" class="form-select" required disabled>
+                            <option value="">Select Sub-Sector...</option>
+                            {% for sector in sectors %}
+                                {% for subsector in sector.sub_sectors %}
+                                <option value="{{ subsector.id }}"
+                                        data-sector-id="{{ sector.id }}"
+                                        {% if instrument.sub_sector_id == subsector.id %}selected{% endif %}
+                                        style="display: none;">
+                                    {{ subsector.name }}
+                                </option>
+                                {% endfor %}
+                            {% endfor %}
+                        </select>
+                        <small class="form-text text-muted">
+                            Select a sector first to see available sub-sectors
+                        </small>
+                    </div>
+
+                    <!-- Clear Classification Option -->
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="clearClassification">
+                        <label class="form-check-label" for="clearClassification">
+                            Remove sector classification
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save me-2"></i>Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const instrumentToken = {{ instrument.instrument_token }};
+    const kiteConnected = {{ 'true' if current_user.kite_connected else 'false' }};
+
+    // Function to fetch and display quote
+    function loadQuote() {
+        if (!kiteConnected) return;
+
+        document.getElementById('quoteStatus').textContent = 'Loading...';
+
+        fetch(`{{ url_for('stocks.get_quote', instrument_token=0) }}`.replace('/0', `/${instrumentToken}`))
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    document.getElementById('quoteStatus').textContent = 'Error';
+                    document.getElementById('quoteStatus').classList.remove('bg-success');
+                    document.getElementById('quoteStatus').classList.add('bg-danger');
+                    return;
+                }
+
+                // Update quote data
+                const ohlc = data.ohlc || {};
+                const lastPrice = data.last_price || 0;
+                const change = data.change || 0;
+                const changePercent = data.change_percent || 0;
+
+                document.getElementById('lastPrice').textContent = `₹${lastPrice.toFixed(2)}`;
+                document.getElementById('change').innerHTML = `₹${change.toFixed(2)} <small>(${changePercent.toFixed(2)}%)</small>`;
+                document.getElementById('change').className = change >= 0 ? 'mb-0 text-success' : 'mb-0 text-danger';
+
+                document.getElementById('open').textContent = ohlc.open ? `₹${ohlc.open.toFixed(2)}` : '-';
+                document.getElementById('high').textContent = ohlc.high ? `₹${ohlc.high.toFixed(2)}` : '-';
+                document.getElementById('low').textContent = ohlc.low ? `₹${ohlc.low.toFixed(2)}` : '-';
+                document.getElementById('prevClose').textContent = ohlc.close ? `₹${ohlc.close.toFixed(2)}` : '-';
+                document.getElementById('volume').textContent = data.volume ? data.volume.toLocaleString() : '-';
+                document.getElementById('avgPrice').textContent = data.average_price ? `₹${data.average_price.toFixed(2)}` : '-';
+
+                document.getElementById('quoteStatus').textContent = 'Live';
+                document.getElementById('quoteStatus').classList.remove('bg-danger');
+                document.getElementById('quoteStatus').classList.add('bg-success');
+            })
+            .catch(error => {
+                console.error('Error loading quote:', error);
+                document.getElementById('quoteStatus').textContent = 'Error';
+                document.getElementById('quoteStatus').classList.add('bg-danger');
+            });
+    }
+
+    // Load quote on page load
+    if (kiteConnected) {
+        loadQuote();
+    }
+
+    // Refresh quote button
+    const refreshBtn = document.getElementById('refreshQuote');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', loadQuote);
+    }
+
+    // Handle add to watchlist form
+    const watchlistForm = document.getElementById('addToWatchlistForm');
+    if (watchlistForm) {
+        watchlistForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+
+            fetch('{{ url_for("stocks.add_to_watchlist") }}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+                },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Successfully added to watchlist!');
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('addToWatchlistModal'));
+                    modal.hide();
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('Error adding to watchlist: ' + error);
+            });
+        });
+    }
+
+    // Edit Sector Modal - Stepped Selection
+    const sectorSelect = document.getElementById('sectorSelect');
+    const subSectorSelect = document.getElementById('subSectorSelect');
+    const clearClassification = document.getElementById('clearClassification');
+
+    if (sectorSelect && subSectorSelect) {
+        // Function to update sub-sector options based on selected sector
+        function updateSubSectorOptions() {
+            const selectedSectorId = sectorSelect.value;
+            const allSubSectorOptions = subSectorSelect.querySelectorAll('option[data-sector-id]');
+
+            // Hide all sub-sector options first
+            allSubSectorOptions.forEach(option => {
+                option.style.display = 'none';
+            });
+
+            // Show only sub-sectors for the selected sector
+            if (selectedSectorId) {
+                allSubSectorOptions.forEach(option => {
+                    if (option.getAttribute('data-sector-id') === selectedSectorId) {
+                        option.style.display = 'block';
+                    }
+                });
+                subSectorSelect.disabled = false;
+            } else {
+                // If no sector selected, disable sub-sector
+                subSectorSelect.value = '';
+                subSectorSelect.disabled = true;
+            }
+        }
+
+        // Initialize on page load
+        updateSubSectorOptions();
+
+        // Update when sector changes
+        sectorSelect.addEventListener('change', function() {
+            subSectorSelect.value = ''; // Reset sub-sector selection
+            updateSubSectorOptions();
+        });
+
+        // Handle clear classification checkbox
+        if (clearClassification) {
+            clearClassification.addEventListener('change', function() {
+                if (this.checked) {
+                    sectorSelect.disabled = true;
+                    subSectorSelect.disabled = true;
+                    sectorSelect.value = '';
+                    subSectorSelect.value = '';
+                    sectorSelect.required = false;
+                    subSectorSelect.required = false;
+                } else {
+                    sectorSelect.disabled = false;
+                    sectorSelect.required = true;
+                    subSectorSelect.required = true;
+                    updateSubSectorOptions();
+                }
+            });
+        }
+    }
+});
+</script>
+{% endblock %}

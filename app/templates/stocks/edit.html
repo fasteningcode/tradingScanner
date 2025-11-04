@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="mb-4">
+            <h1 class="h2 mb-1">
+                <i class="bi bi-pencil text-primary"></i> Edit Stock
+            </h1>
+            <p class="text-muted mb-0">
+                Update stock information and sector classification
+            </p>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card card-modern shadow-sm">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-info-circle me-2"></i> Stock Details
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+                    <!-- Read-only fields -->
+                    <div class="mb-3">
+                        <label class="form-label">Trading Symbol</label>
+                        <input type="text" class="form-control" value="{{ stock.tradingsymbol }}" disabled>
+                        <small class="text-muted">Symbol cannot be changed</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Exchange</label>
+                        <input type="text" class="form-control" value="{{ stock.exchange }}" disabled>
+                        <small class="text-muted">Exchange cannot be changed</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Instrument Token</label>
+                        <input type="text" class="form-control" value="{{ stock.instrument_token }}" disabled>
+                        <small class="text-muted">Unique token from Kite API</small>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Editable fields -->
+                    <div class="mb-3">
+                        <label for="name" class="form-label">
+                            Stock Name
+                        </label>
+                        <input type="text"
+                               class="form-control"
+                               id="name"
+                               name="name"
+                               value="{{ stock.name }}"
+                               maxlength="200"
+                               placeholder="e.g., Reliance Industries Limited">
+                        <small class="text-muted">Full company name (optional, leave blank to keep current)</small>
+                    </div>
+
+                    <!-- Sub-Sector Selection -->
+                    <div class="mb-3">
+                        <label for="sub_sector_id" class="form-label">
+                            Sector & Sub-Sector Classification
+                        </label>
+                        <select class="form-select" id="sub_sector_id" name="sub_sector_id">
+                            <option value="">-- No Sector / Sub-Sector --</option>
+                            {% for sector in sectors %}
+                                <optgroup label="{{ sector.name }}">
+                                    {% for subsector in sector.sub_sectors %}
+                                        <option value="{{ subsector.id }}"
+                                                {% if stock.sub_sector_id == subsector.id %}selected{% endif %}>
+                                            {{ subsector.name }}
+                                        </option>
+                                    {% endfor %}
+                                </optgroup>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">
+                            Assign stock to a sector/sub-sector for better organization
+                            {% if stock.sub_sector_obj %}
+                                (Currently: {{ stock.sub_sector_obj.sector.name }} / {{ stock.sub_sector_obj.name }})
+                            {% endif %}
+                        </small>
+                    </div>
+
+                    <!-- NIFTY 500 Status (Read-only) -->
+                    <div class="mb-3">
+                        <label class="form-label">NIFTY 500 Status</label>
+                        <div>
+                            {% if stock.is_nifty500 %}
+                                <span class="badge bg-success">
+                                    <i class="bi bi-check-circle me-1"></i> NIFTY 500 Stock
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary">
+                                    <i class="bi bi-x-circle me-1"></i> Not in NIFTY 500
+                                </span>
+                            {% endif %}
+                        </div>
+                        <small class="text-muted">This status is managed automatically</small>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('stocks.index') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle me-2"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                            <i class="bi bi-check-circle me-2"></i>Update Stock
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stock Information Card -->
+    <div class="col-lg-4">
+        <div class="card card-modern shadow-sm">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-graph-up me-2"></i> Stock Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <strong>Symbol:</strong>
+                    <div class="text-muted">{{ stock.tradingsymbol }}</div>
+                </div>
+
+                <div class="mb-3">
+                    <strong>Name:</strong>
+                    <div class="text-muted">{{ stock.name or 'N/A' }}</div>
+                </div>
+
+                <div class="mb-3">
+                    <strong>Exchange:</strong>
+                    <div class="text-muted">{{ stock.exchange }}</div>
+                </div>
+
+                <div class="mb-3">
+                    <strong>Type:</strong>
+                    <div class="text-muted">{{ stock.instrument_type }}</div>
+                </div>
+
+                <div class="mb-3">
+                    <strong>Lot Size:</strong>
+                    <div class="text-muted">{{ stock.lot_size }}</div>
+                </div>
+
+                <div class="mb-3">
+                    <strong>Tick Size:</strong>
+                    <div class="text-muted">{{ stock.tick_size }}</div>
+                </div>
+
+                <hr>
+
+                <div class="mb-0">
+                    <strong>Last Updated:</strong>
+                    <div class="text-muted small">
+                        {{ stock.last_updated.strftime('%Y-%m-%d %H:%M') if stock.last_updated else 'N/A' }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info Alert -->
+        <div class="alert alert-info mt-3">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong>What can be edited?</strong>
+            <ul class="mb-0 mt-2 small">
+                <li><strong>Stock Name:</strong> Can be updated</li>
+                <li><strong>Sector Classification:</strong> Can be changed</li>
+                <li><strong>Symbol & Exchange:</strong> Cannot be modified (fixed from API)</li>
+                <li><strong>NIFTY 500 Status:</strong> Managed automatically</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Edit stock page loaded');
+
+    // Add visual feedback on form submit
+    const form = document.querySelector('form');
+    const submitBtn = document.getElementById('submitBtn');
+
+    form.addEventListener('submit', function() {
+        if (form.checkValidity()) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Updating...';
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -4,10 +4,16 @@
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1 class="h2">
-                <i class="bi bi-speedometer2 text-primary"></i> Dashboard
-            </h1>
-            <p class="text-muted mb-0">Welcome back, <strong>{{ current_user.username }}</strong>!</p>
+            <div>
+                <h1 class="h2 mb-1">
+                    <i class="bi bi-speedometer2 text-primary pulse-icon"></i> Dashboard
+                </h1>
+                <p class="text-muted mb-0">Welcome back, <strong class="text-primary">{{ current_user.username }}</strong>!</p>
+            </div>
+            <div class="text-end">
+                <small class="text-muted d-block">Last login</small>
+                <small class="fw-bold">{{ stats.last_login }}</small>
+            </div>
         </div>
     </div>
 </div>
@@ -62,16 +68,16 @@
 <!-- Statistics Cards -->
 <div class="row g-4 mb-4">
     <div class="col-md-6 col-lg-3">
-        <div class="card stat-card {% if current_user.kite_connected %}bg-success{% else %}bg-secondary{% endif %} text-white shadow-sm">
+        <div class="card stat-card {% if current_user.kite_connected %}gradient-success{% else %}gradient-secondary{% endif %} text-white shadow-sm">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="card-subtitle mb-2 text-white-50">Kite Status</h6>
-                        <h2 class="card-title mb-0 small">
+                        <h6 class="card-subtitle mb-2 text-white opacity-75">Kite Status</h6>
+                        <h2 class="card-title mb-0 fw-bold">
                             {% if current_user.kite_connected %}
-                                Connected
+                                <i class="bi bi-check-circle-fill me-2"></i>Connected
                             {% else %}
-                                Not Connected
+                                <i class="bi bi-x-circle-fill me-2"></i>Not Connected
                             {% endif %}
                         </h2>
                     </div>
@@ -84,15 +90,16 @@
     </div>
 
     <div class="col-md-6 col-lg-3">
-        <div class="card stat-card bg-primary text-white shadow-sm">
+        <div class="card stat-card gradient-primary text-white shadow-sm">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="card-subtitle mb-2 text-white-50">Total Users</h6>
-                        <h2 class="card-title mb-0">{{ stats.total_users }}</h2>
+                        <h6 class="card-subtitle mb-2 text-white opacity-75">My Watchlists</h6>
+                        <h2 class="card-title mb-0 fw-bold">{{ stats.watchlists_count }}</h2>
+                        <small class="opacity-75">Active watchlists</small>
                     </div>
                     <div class="stat-icon">
-                        <i class="bi bi-people fs-1"></i>
+                        <i class="bi bi-star-fill fs-1"></i>
                     </div>
                 </div>
             </div>
@@ -100,15 +107,16 @@
     </div>
 
     <div class="col-md-6 col-lg-3">
-        <div class="card stat-card bg-warning text-white shadow-sm">
+        <div class="card stat-card gradient-warning text-white shadow-sm">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="card-subtitle mb-2 text-white-50">Days Member</h6>
-                        <h2 class="card-title mb-0">{{ stats.days_member }}</h2>
+                        <h6 class="card-subtitle mb-2 text-white opacity-75">Stocks Tracked</h6>
+                        <h2 class="card-title mb-0 fw-bold">{{ stats.total_stocks_tracked }}</h2>
+                        <small class="opacity-75">Across all watchlists</small>
                     </div>
                     <div class="stat-icon">
-                        <i class="bi bi-calendar-check fs-1"></i>
+                        <i class="bi bi-graph-up fs-1"></i>
                     </div>
                 </div>
             </div>
@@ -116,15 +124,16 @@
     </div>
 
     <div class="col-md-6 col-lg-3">
-        <div class="card stat-card bg-info text-white shadow-sm">
+        <div class="card stat-card gradient-info text-white shadow-sm">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="card-subtitle mb-2 text-white-50">Account Status</h6>
-                        <h2 class="card-title mb-0">{{ stats.account_status }}</h2>
+                        <h6 class="card-subtitle mb-2 text-white opacity-75">Available Stocks</h6>
+                        <h2 class="card-title mb-0 fw-bold">{{ "{:,}".format(stats.total_instruments) }}</h2>
+                        <small class="opacity-75">NSE & BSE equities</small>
                     </div>
                     <div class="stat-icon">
-                        <i class="bi bi-check-circle fs-1"></i>
+                        <i class="bi bi-database fs-1"></i>
                     </div>
                 </div>
             </div>
@@ -135,82 +144,150 @@
 <!-- User Information -->
 <div class="row g-4">
     <div class="col-lg-8">
-        <div class="card shadow-sm">
-            <div class="card-header bg-white">
+        <div class="card card-modern shadow-sm">
+            <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="bi bi-info-circle text-primary"></i> Account Information
+                    <i class="bi bi-info-circle me-2"></i> Account Information
                 </h5>
             </div>
             <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-borderless">
-                        <tbody>
-                            <tr>
-                                <td class="fw-bold" style="width: 200px;">
-                                    <i class="bi bi-person text-primary me-2"></i>Username:
-                                </td>
-                                <td>{{ current_user.username }}</td>
-                            </tr>
-                            <tr>
-                                <td class="fw-bold">
-                                    <i class="bi bi-envelope text-primary me-2"></i>Email:
-                                </td>
-                                <td>{{ current_user.email }}</td>
-                            </tr>
-                            <tr>
-                                <td class="fw-bold">
-                                    <i class="bi bi-calendar-event text-primary me-2"></i>Member Since:
-                                </td>
-                                <td>{{ current_user.created_at.strftime('%B %d, %Y') }}</td>
-                            </tr>
-                            <tr>
-                                <td class="fw-bold">
-                                    <i class="bi bi-clock-history text-primary me-2"></i>Last Login:
-                                </td>
-                                <td>{{ stats.last_login }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="p-3 glass-card h-100">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="bi bi-person-circle fs-4 text-primary me-3"></i>
+                                <div>
+                                    <small class="text-muted d-block">Username</small>
+                                    <strong>{{ current_user.username }}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-3 glass-card h-100">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="bi bi-envelope-fill fs-4 text-primary me-3"></i>
+                                <div>
+                                    <small class="text-muted d-block">Email</small>
+                                    <strong class="small">{{ current_user.email }}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-3 glass-card h-100">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="bi bi-calendar-event-fill fs-4 text-primary me-3"></i>
+                                <div>
+                                    <small class="text-muted d-block">Member Since</small>
+                                    <strong>{{ current_user.created_at.strftime('%B %d, %Y') }}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-3 glass-card h-100">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="bi bi-clock-history fs-4 text-primary me-3"></i>
+                                <div>
+                                    <small class="text-muted d-block">Last Login</small>
+                                    <strong class="small">{{ stats.last_login }}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <div class="col-lg-4">
-        <div class="card shadow-sm">
-            <div class="card-header bg-white">
+        <div class="card card-modern shadow-sm mb-4">
+            <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="bi bi-lightning text-warning"></i> Quick Actions
+                    <i class="bi bi-lightning-fill me-2"></i> Quick Actions
                 </h5>
             </div>
             <div class="card-body">
-                <div class="d-grid gap-2">
-                    <a href="{{ url_for('dashboard.profile') }}" class="btn btn-outline-primary">
-                        <i class="bi bi-person-gear me-2"></i>Edit Profile
+                <div class="d-grid gap-3">
+                    <a href="{{ url_for('stocks.index') }}" class="btn btn-outline-primary btn-lg">
+                        <i class="bi bi-graph-up me-2"></i>Browse Stocks
                     </a>
-                    <button class="btn btn-outline-secondary" type="button">
+                    <a href="{{ url_for('watchlist.index') }}" class="btn btn-outline-success btn-lg">
+                        <i class="bi bi-star me-2"></i>My Watchlists
+                    </a>
+                    <a href="{{ url_for('settings.index') }}" class="btn btn-outline-secondary btn-lg">
                         <i class="bi bi-gear me-2"></i>Settings
-                    </button>
-                    <button class="btn btn-outline-info" type="button">
-                        <i class="bi bi-question-circle me-2"></i>Help & Support
-                    </button>
+                    </a>
                 </div>
             </div>
         </div>
 
-        <div class="card shadow-sm mt-4">
-            <div class="card-header bg-white">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-bell text-danger"></i> Notifications
-                </h5>
-            </div>
+        <div class="card glass-card shadow-sm">
             <div class="card-body">
-                <p class="text-muted small mb-0">
-                    <i class="bi bi-check-circle text-success me-2"></i>
-                    No new notifications
-                </p>
+                <h6 class="card-title mb-3">
+                    <i class="bi bi-bell-fill text-warning me-2"></i> Notifications
+                </h6>
+                <div class="d-flex align-items-center text-success">
+                    <i class="bi bi-check-circle-fill fs-4 me-3"></i>
+                    <div>
+                        <small class="d-block">All clear!</small>
+                        <small class="text-muted">No new notifications</small>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Recent Watchlists Section -->
+{% if recent_watchlists %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card card-modern shadow-sm">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-star-fill text-warning me-2"></i> Recent Watchlists
+                    </h5>
+                    <a href="{{ url_for('watchlist.index') }}" class="btn btn-sm btn-outline-primary">
+                        View All <i class="bi bi-arrow-right ms-1"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    {% for data in recent_watchlists %}
+                    <div class="col-md-4">
+                        <div class="glass-card p-3 h-100">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <h6 class="mb-1">
+                                        <i class="bi bi-star-fill text-warning me-1"></i>
+                                        {{ data.watchlist.name }}
+                                    </h6>
+                                    <span class="badge bg-primary">{{ data.item_count }} stocks</span>
+                                </div>
+                            </div>
+                            {% if data.watchlist.description %}
+                            <p class="text-muted small mb-2">{{ data.watchlist.description[:50] }}{% if data.watchlist.description|length > 50 %}...{% endif %}</p>
+                            {% endif %}
+                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                <small class="text-muted">
+                                    <i class="bi bi-calendar3 me-1"></i>
+                                    {{ data.watchlist.created_at.strftime('%b %d') }}
+                                </small>
+                                <a href="{{ url_for('watchlist.view', watchlist_id=data.watchlist.id) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i> View
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

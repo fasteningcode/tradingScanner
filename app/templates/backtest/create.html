@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="h2 mb-1">
+                    <i class="bi bi-plus-circle text-primary"></i> Create Backtest Strategy
+                </h1>
+                <p class="text-muted mb-0">Design a new trading strategy for backtesting</p>
+            </div>
+            <div>
+                <a href="{{ url_for('backtest.index') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Strategies
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-10 mx-auto">
+        <div class="card card-modern shadow-sm">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-gear me-2"></i>Strategy Configuration
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="createStrategyForm">
+                    <!-- Basic Information -->
+                    <div class="mb-4">
+                        <h6 class="fw-bold mb-3">Basic Information</h6>
+                        <div class="mb-3">
+                            <label class="form-label">Strategy Name *</label>
+                            <input type="text" class="form-control" name="name" required
+                                   placeholder="e.g., SMA Crossover Strategy">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-control" name="description" rows="3"
+                                      placeholder="Describe your strategy logic"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Capital & Position -->
+                    <div class="mb-4">
+                        <h6 class="fw-bold mb-3">Capital & Position</h6>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Initial Capital (₹)</label>
+                                <input type="number" class="form-control" name="initial_capital"
+                                       value="100000" step="1000" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Position Size (%)</label>
+                                <input type="number" class="form-control" name="position_size"
+                                       value="10" step="1" min="1" max="100" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Timeframe -->
+                    <div class="mb-4">
+                        <h6 class="fw-bold mb-3">Timeframe</h6>
+                        <select class="form-select" name="timeframe" required>
+                            <option value="minute">1 Minute</option>
+                            <option value="5minute">5 Minutes</option>
+                            <option value="15minute">15 Minutes</option>
+                            <option value="hour">1 Hour</option>
+                            <option value="day" selected>1 Day</option>
+                        </select>
+                    </div>
+
+                    <!-- Entry Rules Placeholder -->
+                    <div class="mb-4">
+                        <h6 class="fw-bold mb-3">Entry Rules</h6>
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Visual Strategy Builder Coming Soon!</strong>
+                            <p class="mb-0 mt-2">For now, strategies will use default entry conditions. Future updates will include a visual rule builder with technical indicators.</p>
+                        </div>
+                        <input type="hidden" name="entry_rules" value='{"default": true}'>
+                    </div>
+
+                    <!-- Exit Rules Placeholder -->
+                    <div class="mb-4">
+                        <h6 class="fw-bold mb-3">Exit Rules</h6>
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Visual Strategy Builder Coming Soon!</strong>
+                            <p class="mb-0 mt-2">Default exit rules will be applied. Full customization will be available in future updates.</p>
+                        </div>
+                        <input type="hidden" name="exit_rules" value='{"default": true}'>
+                    </div>
+
+                    <!-- Submit -->
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="bi bi-check-circle me-2"></i>Create Strategy
+                        </button>
+                        <a href="{{ url_for('backtest.index') }}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('createStrategyForm');
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const formData = new FormData(form);
+        const data = {
+            name: formData.get('name'),
+            description: formData.get('description'),
+            initial_capital: parseFloat(formData.get('initial_capital')),
+            position_size: parseFloat(formData.get('position_size')),
+            timeframe: formData.get('timeframe'),
+            entry_rules: JSON.parse(formData.get('entry_rules')),
+            exit_rules: JSON.parse(formData.get('exit_rules'))
+        };
+
+        fetch('{{ url_for("backtest.save_strategy") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                window.location.href = '{{ url_for("backtest.index") }}';
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to create strategy');
+        });
+    });
+});
+</script>
+{% endblock %}

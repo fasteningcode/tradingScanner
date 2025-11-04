@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 text-center">
+        <div class="card card-modern shadow-lg">
+            <div class="card-body py-5">
+                <div class="mb-4">
+                    <i class="bi bi-search display-1 text-muted"></i>
+                </div>
+                <h1 class="display-4 mb-3">Stock Scanner</h1>
+                <p class="lead text-muted mb-4">
+                    Coming Soon
+                </p>
+                <p class="text-muted">
+                    The stock scanner feature is currently under development.
+                    This will allow you to scan and filter stocks based on various technical and fundamental criteria.
+                </p>
+                <hr class="my-4">
+                <p class="text-muted small mb-0">
+                    In the meantime, you can:
+                </p>
+                <div class="d-flex justify-content-center gap-3 mt-3">
+                    <a href="{{ url_for('stocks.index') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-graph-up me-2"></i>Browse Stocks
+                    </a>
+                    <a href="{{ url_for('sectors.index') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-pie-chart me-2"></i>View Sectors
+                    </a>
+                    <a href="{{ url_for('sector_management.index') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-gear-fill me-2"></i>Manage Sectors
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

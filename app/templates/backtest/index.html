@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="h2 mb-1">
+                    <i class="bi bi-clock-history text-primary"></i> Strategy Backtest
+                </h1>
+                <p class="text-muted mb-0">Test your trading strategies with historical data</p>
+            </div>
+            <div>
+                <a href="{{ url_for('backtest.create') }}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle me-2"></i>Create Strategy
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Strategy Stats -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card gradient-primary text-white shadow-sm">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-white opacity-75">Total Strategies</h6>
+                <h2 class="card-title mb-0 fw-bold">{{ strategies|length }}</h2>
+                <small class="opacity-75">Created</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card gradient-success text-white shadow-sm">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-white opacity-75">Active</h6>
+                <h2 class="card-title mb-0 fw-bold">{{ strategies|selectattr('is_active')|list|length }}</h2>
+                <small class="opacity-75">Strategies</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card gradient-info text-white shadow-sm">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-white opacity-75">Avg Win Rate</h6>
+                <h2 class="card-title mb-0 fw-bold">--</h2>
+                <small class="opacity-75">Across all tests</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card gradient-warning text-white shadow-sm">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-white opacity-75">Total Tests</h6>
+                <h2 class="card-title mb-0 fw-bold">{{ strategies|sum(attribute='results')|length if strategies else 0 }}</h2>
+                <small class="opacity-75">Backtests run</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Strategies List -->
+{% if strategies %}
+<div class="row g-4">
+    {% for strategy in strategies %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card glass-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <h5 class="card-title mb-0">{{ strategy.name }}</h5>
+                    <span class="badge {{ 'bg-success' if strategy.is_active else 'bg-secondary' }}">
+                        {{ 'Active' if strategy.is_active else 'Inactive' }}
+                    </span>
+                </div>
+                <p class="text-muted small mb-3">{{ strategy.description or 'No description' }}</p>
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <small class="text-muted d-block">Timeframe</small>
+                        <strong>{{ strategy.timeframe|upper }}</strong>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted d-block">Capital</small>
+                        <strong>₹{{ strategy.initial_capital|int }}</strong>
+                    </div>
+                </div>
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('backtest.view_strategy', strategy_id=strategy.id) }}"
+                       class="btn btn-sm btn-primary">
+                        <i class="bi bi-eye me-2"></i>View Details
+                    </a>
+                    <button class="btn btn-sm btn-outline-danger delete-strategy-btn"
+                            data-strategy-id="{{ strategy.id }}"
+                            data-strategy-name="{{ strategy.name }}">
+                        <i class="bi bi-trash me-2"></i>Delete
+                    </button>
+                </div>
+            </div>
+            <div class="card-footer bg-transparent text-muted small">
+                Created {{ strategy.created_at.strftime('%b %d, %Y') }}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card card-modern shadow-sm">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-clock-history fs-1 text-muted mb-3"></i>
+        <h5 class="text-muted">No Strategies Created</h5>
+        <p class="text-muted mb-3">Create your first backtesting strategy to get started.</p>
+        <a href="{{ url_for('backtest.create') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-2"></i>Create Strategy
+        </a>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Delete strategy
+    document.querySelectorAll('.delete-strategy-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const strategyId = this.dataset.strategyId;
+            const strategyName = this.dataset.strategyName;
+
+            if (!confirm(`Delete strategy "${strategyName}"? This will also delete all backtest results.`)) {
+                return;
+            }
+
+            fetch(`/backtest/api/strategies/${strategyId}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    window.location.reload();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            });
+        });
+    });
+});
+</script>
+{% endblock %}

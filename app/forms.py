@@ -99,3 +99,17 @@ class EmergencyRestoreForm(FlaskForm):
         DataRequired(message='Emergency restore password is required')
     ])
     submit = SubmitField('Emergency Restore Database')
+
+
+class KiteCredentialsForm(FlaskForm):
+    """Form for manually updating Kite Connect credentials"""
+
+    access_token = StringField('Access Token', validators=[
+        DataRequired(message='Access token is required')
+    ])
+    user_id = StringField('User ID', validators=[
+        DataRequired(message='User ID is required')
+    ])
+    public_token = StringField('Public Token')
+    refresh_token = StringField('Refresh Token')
+    submit = SubmitField('Update Credentials')

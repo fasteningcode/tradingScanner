@@ -514,48 +514,75 @@ class HistoricalDataSettings(db.Model):
 
 
 class HistoricalData(db.Model):
-    """Model for storing historical candlestick data"""
+    """Model for storing historical candlestick data in JSON format (one row per stock per interval)"""
 
     __tablename__ = 'historical_data'
 
     id = db.Column(db.Integer, primary_key=True)
-    instrument_id = db.Column(db.Integer, db.ForeignKey('instruments.id'), nullable=False, index=True)
-    timestamp = db.Column(db.DateTime, nullable=False, index=True)
+    tradingsymbol = db.Column(db.String(50), nullable=False, index=True)
+    last_downloaded = db.Column(db.DateTime, nullable=True)  # When data was last fetched
     interval = db.Column(db.String(20), nullable=False, index=True)  # 'minute', '3minute', '5minute', '10minute', '15minute', '30minute', '60minute', 'day'
 
-    # OHLCV data
-    open = db.Column(db.Float, nullable=False)
-    high = db.Column(db.Float, nullable=False)
-    low = db.Column(db.Float, nullable=False)
-    close = db.Column(db.Float, nullable=False)
-    volume = db.Column(db.Integer, default=0)
-    oi = db.Column(db.Integer, default=0)  # Open Interest (for derivatives)
+    # Candlestick data stored as JSON array
+    # Format: [{"date": "2024-01-01", "open": 100.0, "high": 105.0, "low": 99.0, "close": 103.0, "volume": 1000, "oi": 0}, ...]
+    candlestick_data = db.Column(db.Text, nullable=False)  # Stored as JSON text
 
     # Metadata
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_on = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_on = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relationships
-    instrument = db.relationship('Instrument', backref=db.backref('historical_data', lazy='dynamic'))
-
-    # Unique constraint: One candle per instrument per timestamp per interval
+    # Unique constraint: One row per stock per interval
     __table_args__ = (
-        db.UniqueConstraint('instrument_id', 'timestamp', 'interval', name='uq_instrument_timestamp_interval'),
-        db.Index('ix_historical_data_lookup', 'instrument_id', 'interval', 'timestamp'),
+        db.UniqueConstraint('tradingsymbol', 'interval', name='uq_tradingsymbol_interval'),
+        db.Index('ix_historical_data_lookup', 'tradingsymbol', 'interval'),
     )
 
     def __repr__(self):
-        return f'<HistoricalData {self.instrument_id} @ {self.timestamp} [{self.interval}]>'
+        return f'<HistoricalData {self.tradingsymbol} [{self.interval}]>'
+
+    def get_candles(self):
+        """Parse and return candlestick data as Python list"""
+        import json
+        try:
+            return json.loads(self.candlestick_data) if self.candlestick_data else []
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    def set_candles(self, candles_list):
+        """Set candlestick data from Python list (converts to JSON)"""
+        import json
+        self.candlestick_data = json.dumps(candles_list)
+        self.updated_on = datetime.utcnow()
+
+    def get_date_range(self):
+        """Get earliest and latest dates from candlestick data"""
+        candles = self.get_candles()
+        if not candles:
+            return None, None
+
+        dates = [c.get('date') for c in candles if c.get('date')]
+        if not dates:
+            return None, None
+
+        return min(dates), max(dates)
+
+    def get_candle_count(self):
+        """Get total number of candles"""
+        return len(self.get_candles())
 
     def to_dict(self):
         """Convert to dictionary for JSON serialization"""
+        earliest, latest = self.get_date_range()
         return {
-            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
-            'open': self.open,
-            'high': self.high,
-            'low': self.low,
-            'close': self.close,
-            'volume': self.volume,
-            'oi': self.oi
+            'id': self.id,
+            'tradingsymbol': self.tradingsymbol,
+            'interval': self.interval,
+            'last_downloaded': self.last_downloaded.isoformat() if self.last_downloaded else None,
+            'candle_count': self.get_candle_count(),
+            'earliest_date': earliest,
+            'latest_date': latest,
+            'created_on': self.created_on.isoformat() if self.created_on else None,
+            'updated_on': self.updated_on.isoformat() if self.updated_on else None
         }
 
 

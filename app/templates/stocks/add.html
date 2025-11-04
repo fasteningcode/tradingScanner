@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="mb-4">
+            <h1 class="h2 mb-1">
+                <i class="bi bi-plus-circle text-primary"></i> Add New Stock
+            </h1>
+            <p class="text-muted mb-0">
+                Enter a stock symbol to fetch details from Kite API and add to your database
+            </p>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card card-modern shadow-sm">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-search me-2"></i> Stock Symbol
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+                    <!-- Exchange Selection -->
+                    <div class="mb-3">
+                        <label for="exchange" class="form-label">
+                            Exchange <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="exchange" name="exchange" required>
+                            <option value="NSE" selected>NSE (National Stock Exchange)</option>
+                            <option value="BSE">BSE (Bombay Stock Exchange)</option>
+                        </select>
+                        <small class="text-muted">Select the stock exchange</small>
+                    </div>
+
+                    <!-- Symbol Input -->
+                    <div class="mb-3">
+                        <label for="symbol" class="form-label">
+                            Trading Symbol <span class="text-danger">*</span>
+                        </label>
+                        <input type="text"
+                               class="form-control text-uppercase"
+                               id="symbol"
+                               name="symbol"
+                               value="{% if symbol %}{{ symbol }}{% endif %}"
+                               required
+                               minlength="1"
+                               maxlength="50"
+                               placeholder="e.g., RELIANCE, INFY, TCS"
+                               style="text-transform: uppercase;">
+                        <small class="text-muted">Enter the stock trading symbol (will be converted to uppercase)</small>
+                    </div>
+
+                    <!-- Info Alert -->
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>How it works:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Enter the trading symbol (e.g., "RELIANCE" for Reliance Industries)</li>
+                            <li>System will fetch stock details from Kite API</li>
+                            <li>Stock name, instrument token, and metadata will be automatically populated</li>
+                            <li>Symbol must be unique - duplicate stocks cannot be added</li>
+                        </ul>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('stocks.index') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle me-2"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                            <i class="bi bi-search me-2"></i>Fetch & Add Stock
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instructions Card -->
+    <div class="col-lg-6">
+        <div class="card card-modern shadow-sm">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-lightbulb me-2"></i> Instructions
+                </h5>
+            </div>
+            <div class="card-body">
+                <h6 class="text-primary">Finding Trading Symbols</h6>
+                <p class="text-muted small mb-3">
+                    Trading symbols are the unique identifiers for stocks on exchanges. Here are common examples:
+                </p>
+
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Company</th>
+                                <th>Symbol</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Reliance Industries</td>
+                                <td><code>RELIANCE</code></td>
+                            </tr>
+                            <tr>
+                                <td>Tata Consultancy Services</td>
+                                <td><code>TCS</code></td>
+                            </tr>
+                            <tr>
+                                <td>Infosys Limited</td>
+                                <td><code>INFY</code></td>
+                            </tr>
+                            <tr>
+                                <td>HDFC Bank</td>
+                                <td><code>HDFCBANK</code></td>
+                            </tr>
+                            <tr>
+                                <td>ICICI Bank</td>
+                                <td><code>ICICIBANK</code></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <hr>
+
+                <h6 class="text-primary">Requirements</h6>
+                <ul class="text-muted small mb-0">
+                    <li>You must be connected to Kite API</li>
+                    <li>Symbol must exist in the selected exchange</li>
+                    <li>Only equity (EQ) instruments can be added</li>
+                    <li>Duplicate symbols cannot be added</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Kite Connection Status -->
+        {% if not current_user.kite_access_token %}
+        <div class="alert alert-warning mt-3">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            <strong>Not Connected to Kite</strong>
+            <p class="mb-2">You need to connect to Kite API to add stocks.</p>
+            <a href="{{ url_for('kite_auth.connect') }}" class="btn btn-warning btn-sm">
+                <i class="bi bi-link-45deg me-2"></i>Connect to Kite
+            </a>
+        </div>
+        {% else %}
+        <div class="alert alert-success mt-3">
+            <i class="bi bi-check-circle me-2"></i>
+            <strong>Connected to Kite</strong> - Ready to add stocks
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const symbolInput = document.getElementById('symbol');
+
+    // Force uppercase on input
+    symbolInput.addEventListener('input', function() {
+        this.value = this.value.toUpperCase();
+    });
+
+    // Add visual feedback on form submit
+    const form = document.querySelector('form');
+    const submitBtn = document.getElementById('submitBtn');
+
+    form.addEventListener('submit', function() {
+        if (form.checkValidity()) {
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Fetching stock data...';
+        }
+    });
+});
+</script>
+{% endblock %}

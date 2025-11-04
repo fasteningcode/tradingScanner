@@ -1,0 +1,359 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="h2 mb-1">
+                    <i class="bi bi-graph-up text-primary"></i> NIFTY 500 Stocks
+                </h1>
+                <p class="text-muted mb-0">Browse and search from India's top 500 companies (NSE)</p>
+                {% if total_nifty500 %}
+                <small class="badge bg-success">{{ total_nifty500 }} stocks available</small>
+                {% endif %}
+            </div>
+            <div>
+                <a href="{{ url_for('stocks.add_stock') }}" class="btn btn-success me-2">
+                    <i class="bi bi-plus-circle me-2"></i>Add Stock
+                </a>
+                <form method="POST" action="{{ url_for('stocks.sync_instruments') }}" class="d-inline">
+                    <button type="submit" class="btn btn-primary" {% if not current_user.kite_connected %}disabled{% endif %}>
+                        <i class="bi bi-arrow-clockwise me-2"></i>Sync from Kite
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card card-modern shadow-sm mb-4">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('stocks.index') }}" class="row g-3">
+            <div class="col-md-5">
+                <label class="form-label"><i class="bi bi-search me-2"></i>Search</label>
+                <input type="text" name="search" class="form-control" placeholder="Symbol or company name..." value="{{ search }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label"><i class="bi bi-pie-chart me-2"></i>Sector</label>
+                <select name="sector_id" id="sectorFilter" class="form-select">
+                    <option value="">All Sectors</option>
+                    {% for sector in sectors %}
+                    <option value="{{ sector.id }}" {% if sector.id|string == selected_sector_id %}selected{% endif %}>
+                        {{ sector.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label"><i class="bi bi-diagram-3 me-2"></i>Sub-Sector</label>
+                <select name="sub_sector_id" id="subSectorFilter" class="form-select">
+                    <option value="">All Sub-Sectors</option>
+                    {% for sector in sectors %}
+                        {% for subsector in sector.sub_sectors %}
+                        <option value="{{ subsector.id }}"
+                                data-sector-id="{{ sector.id }}"
+                                {% if subsector.id|string == selected_sub_sector_id %}selected{% endif %}
+                                style="display: none;">
+                            {{ subsector.name }}
+                        </option>
+                        {% endfor %}
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-funnel"></i>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Stocks Table -->
+<div class="card card-modern shadow-sm">
+    <div class="card-header">
+        <h5 class="card-title mb-0">
+            <i class="bi bi-list-ul me-2"></i> Stock Listing
+            <span class="badge bg-primary ms-2">{{ pagination.total }} stocks</span>
+        </h5>
+    </div>
+    <div class="card-body p-0">
+        {% if stocks %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Symbol</th>
+                        <th>Company Name</th>
+                        <th>Sector</th>
+                        <th>Last Price</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stock in stocks %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('stocks.detail', symbol=stock.tradingsymbol) }}" class="fw-bold text-decoration-none">
+                                {{ stock.tradingsymbol }}
+                            </a>
+                            <small class="text-muted d-block">NSE</small>
+                        </td>
+                        <td>{{ stock.name or '-' }}</td>
+                        <td>
+                            {% if stock.sub_sector_obj %}
+                                <span class="badge bg-primary">{{ stock.sub_sector_obj.sector.name }}</span>
+                                <br>
+                                <small class="text-muted">{{ stock.sub_sector_obj.name }}</small>
+                            {% else %}
+                                <span class="text-muted">Not classified</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if stock.last_price > 0 %}
+                            ₹{{ "%.2f"|format(stock.last_price) }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <div class="btn-group btn-group-sm">
+                                <a href="{{ url_for('stocks.detail', symbol=stock.tradingsymbol) }}" class="btn btn-outline-primary" title="View Details">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{{ url_for('stocks.edit_stock', stock_id=stock.id) }}" class="btn btn-outline-warning" title="Edit Stock">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                {% if watchlists %}
+                                <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#addToWatchlistModal"
+                                        data-instrument-id="{{ stock.id }}" data-symbol="{{ stock.tradingsymbol }}" title="Add to Watchlist">
+                                    <i class="bi bi-star"></i>
+                                </button>
+                                {% endif %}
+                                <button type="button" class="btn btn-outline-danger" onclick="confirmDelete({{ stock.id }}, '{{ stock.tradingsymbol }}')" title="Delete Stock">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if pagination.pages > 1 %}
+        <div class="card-footer bg-light">
+            <nav>
+                <ul class="pagination pagination-sm mb-0 justify-content-center">
+                    <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                        <a class="page-link" href="{{ url_for('stocks.index', page=pagination.prev_num, search=search, sector_id=selected_sector_id, sub_sector_id=selected_sub_sector_id) }}">
+                            <i class="bi bi-chevron-left"></i>
+                        </a>
+                    </li>
+
+                    {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if page_num %}
+                            <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('stocks.index', page=page_num, search=search, sector_id=selected_sector_id, sub_sector_id=selected_sub_sector_id) }}">
+                                    {{ page_num }}
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+
+                    <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                        <a class="page-link" href="{{ url_for('stocks.index', page=pagination.next_num, search=search, sector_id=selected_sector_id, sub_sector_id=selected_sub_sector_id) }}">
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-inbox fs-1 text-muted"></i>
+            <p class="text-muted mt-3">No stocks found. Try adjusting your filters or sync instruments from Kite.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add to Watchlist Modal -->
+{% if watchlists %}
+<div class="modal fade" id="addToWatchlistModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-star me-2"></i>Add to Watchlist</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="addToWatchlistForm">
+                <div class="modal-body">
+                    <input type="hidden" name="instrument_id" id="modalInstrumentId">
+                    <div class="mb-3">
+                        <label class="form-label">Stock Symbol</label>
+                        <input type="text" class="form-control" id="modalSymbol" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Select Watchlist</label>
+                        <select name="watchlist_id" class="form-select" required>
+                            <option value="">Choose watchlist...</option>
+                            {% for wl in watchlists %}
+                            <option value="{{ wl.id }}">{{ wl.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notes (Optional)</label>
+                        <textarea name="notes" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add to Watchlist</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteStockModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>Confirm Delete</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="deleteStockForm" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete the stock <strong id="deleteStockSymbol"></strong>?</p>
+                    <div class="alert alert-warning">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Warning:</strong> This action cannot be undone. The stock will be removed from the database.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash me-2"></i>Delete Stock
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Delete confirmation function
+function confirmDelete(stockId, symbol) {
+    const modal = new bootstrap.Modal(document.getElementById('deleteStockModal'));
+    const form = document.getElementById('deleteStockForm');
+    const symbolElement = document.getElementById('deleteStockSymbol');
+
+    // Set the form action to delete the specific stock
+    form.action = '{{ url_for("stocks.index") }}' + '/' + stockId + '/delete';
+
+    // Set the stock symbol in the modal
+    symbolElement.textContent = symbol;
+
+    // Show the modal
+    modal.show();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Stepped sector/sub-sector filter functionality
+    const sectorFilter = document.getElementById('sectorFilter');
+    const subSectorFilter = document.getElementById('subSectorFilter');
+
+    if (sectorFilter && subSectorFilter) {
+        // Function to update sub-sector options based on selected sector
+        function updateSubSectorOptions() {
+            const selectedSectorId = sectorFilter.value;
+            const allSubSectorOptions = subSectorFilter.querySelectorAll('option[data-sector-id]');
+
+            // Hide all sub-sector options first
+            allSubSectorOptions.forEach(option => {
+                option.style.display = 'none';
+            });
+
+            // Show only sub-sectors for the selected sector
+            if (selectedSectorId) {
+                allSubSectorOptions.forEach(option => {
+                    if (option.getAttribute('data-sector-id') === selectedSectorId) {
+                        option.style.display = 'block';
+                    }
+                });
+                subSectorFilter.disabled = false;
+            } else {
+                // If "All Sectors" is selected, disable sub-sector filter
+                subSectorFilter.value = '';
+                subSectorFilter.disabled = true;
+            }
+        }
+
+        // Initialize on page load
+        updateSubSectorOptions();
+
+        // Update when sector changes
+        sectorFilter.addEventListener('change', function() {
+            subSectorFilter.value = ''; // Reset sub-sector selection
+            updateSubSectorOptions();
+        });
+    }
+
+    // Handle add to watchlist modal
+    const modal = document.getElementById('addToWatchlistModal');
+    if (modal) {
+        modal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const instrumentId = button.getAttribute('data-instrument-id');
+            const symbol = button.getAttribute('data-symbol');
+
+            document.getElementById('modalInstrumentId').value = instrumentId;
+            document.getElementById('modalSymbol').value = symbol;
+        });
+
+        // Handle form submission
+        document.getElementById('addToWatchlistForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+
+            fetch('{{ url_for("stocks.add_to_watchlist") }}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+                },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Successfully added to watchlist!');
+                    bootstrap.Modal.getInstance(modal).hide();
+                    this.reset();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('Error adding to watchlist: ' + error);
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

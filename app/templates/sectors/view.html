@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 text-center">
+        <div class="card card-modern shadow-lg">
+            <div class="card-body py-5">
+                <div class="mb-4">
+                    <i class="bi bi-pie-chart display-1 text-muted"></i>
+                </div>
+                <h1 class="display-4 mb-3">Sector Details</h1>
+                <p class="lead text-muted mb-4">
+                    Coming Soon
+                </p>
+                <p class="text-muted">
+                    Individual sector view is currently being redesigned.
+                </p>
+                <hr class="my-4">
+                <div class="d-flex justify-content-center gap-3 mt-3">
+                    <a href="{{ url_for('sectors.index') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-left me-2"></i>Back to Sectors
+                    </a>
+                    <a href="{{ url_for('dashboard.index') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-speedometer2 me-2"></i>Go to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

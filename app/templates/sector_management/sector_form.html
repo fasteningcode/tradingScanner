@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="mb-4">
+            <h1 class="h2 mb-1">
+                <i class="bi {% if action == 'create' %}bi-plus-circle{% else %}bi-pencil{% endif %} text-primary"></i>
+                {% if action == 'create' %}Create New Sector{% else %}Edit Sector{% endif %}
+            </h1>
+            <p class="text-muted mb-0">
+                {% if action == 'create' %}
+                Add a new sector to organize your sub-sectors and stocks
+                {% else %}
+                Update sector information and settings
+                {% endif %}
+            </p>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card card-modern shadow-sm">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-info-circle me-2"></i> Sector Details
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <!-- Name Field -->
+                    <div class="mb-3">
+                        <label for="name" class="form-label">
+                            Sector Name <span class="text-danger">*</span>
+                        </label>
+                        <input type="text"
+                               class="form-control"
+                               id="name"
+                               name="name"
+                               value="{% if sector %}{{ sector.name }}{% endif %}"
+                               required
+                               minlength="3"
+                               maxlength="100"
+                               placeholder="e.g., Financial Services, Information Technology">
+                        <small class="text-muted">3-100 characters, must be unique</small>
+                    </div>
+
+                    <!-- Description Field -->
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control"
+                                  id="description"
+                                  name="description"
+                                  rows="3"
+                                  placeholder="Brief description of this sector">{% if sector %}{{ sector.description }}{% endif %}</textarea>
+                        <small class="text-muted">Optional description for reference</small>
+                    </div>
+
+                    <!-- Icon Field -->
+                    <div class="mb-3">
+                        <label for="icon" class="form-label">Icon Class</label>
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="bi" id="iconPreview" {% if sector and sector.icon %}class="{{ sector.icon }}"{% endif %}></i>
+                            </span>
+                            <input type="text"
+                                   class="form-control"
+                                   id="icon"
+                                   name="icon"
+                                   value="{% if sector %}{{ sector.icon }}{% endif %}"
+                                   placeholder="bi-bank2">
+                        </div>
+                        <small class="text-muted">
+                            Bootstrap Icon class name (e.g., bi-bank2, bi-laptop, bi-heart-pulse).
+                            <a href="https://icons.getbootstrap.com/" target="_blank">Browse icons</a>
+                        </small>
+                    </div>
+
+                    <!-- Color Field -->
+                    <div class="mb-3">
+                        <label for="color" class="form-label">Color</label>
+                        <div class="input-group">
+                            <input type="color"
+                                   class="form-control form-control-color"
+                                   id="colorPicker"
+                                   value="{% if sector and sector.color %}{{ sector.color }}{% else %}#667eea{% endif %}">
+                            <input type="text"
+                                   class="form-control"
+                                   id="color"
+                                   name="color"
+                                   value="{% if sector %}{{ sector.color }}{% endif %}"
+                                   placeholder="#667eea"
+                                   pattern="^#[0-9A-Fa-f]{6}$">
+                        </div>
+                        <small class="text-muted">Hex color code for visual identification</small>
+                    </div>
+
+                    <!-- Display Order -->
+                    <div class="mb-3">
+                        <label for="display_order" class="form-label">Display Order</label>
+                        <input type="number"
+                               class="form-control"
+                               id="display_order"
+                               name="display_order"
+                               value="{% if sector %}{{ sector.display_order }}{% else %}0{% endif %}"
+                               min="0"
+                               placeholder="0">
+                        <small class="text-muted">Lower numbers appear first (0 = default)</small>
+                    </div>
+
+                    <!-- Active Status (Edit only) -->
+                    {% if action == 'edit' %}
+                    <div class="mb-3 form-check">
+                        <input type="checkbox"
+                               class="form-check-input"
+                               id="is_active"
+                               name="is_active"
+                               {% if sector.is_active %}checked{% endif %}>
+                        <label class="form-check-label" for="is_active">
+                            Active (visible in system)
+                        </label>
+                    </div>
+                    {% endif %}
+
+                    <!-- Action Buttons -->
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('sector_management.index') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle me-2"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                            <i class="bi bi-check-circle me-2"></i>
+                            {% if action == 'create' %}Create Sector{% else %}Update Sector{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preview Card -->
+    <div class="col-lg-4">
+        <div class="card card-modern shadow-sm">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-eye me-2"></i> Preview
+                </h5>
+            </div>
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <i class="bi fs-1" id="previewIcon" {% if sector and sector.icon %}class="{{ sector.icon }}"{% endif %} style="color: {% if sector and sector.color %}{{ sector.color }}{% else %}#667eea{% endif %}"></i>
+                </div>
+                <h5 id="previewName">{% if sector %}{{ sector.name }}{% else %}Sector Name{% endif %}</h5>
+                <p class="text-muted small" id="previewDescription">
+                    {% if sector and sector.description %}{{ sector.description }}{% else %}Sector description will appear here{% endif %}
+                </p>
+            </div>
+        </div>
+
+        <!-- Icon Examples -->
+        <div class="card card-modern shadow-sm mt-3">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-palette me-2"></i> Popular Icons
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-2 text-center">
+                    <div class="col-4">
+                        <button type="button" class="btn btn-sm btn-outline-secondary w-100" onclick="selectIcon('bi-bank2')">
+                            <i class="bi bi-bank2 fs-4"></i>
+                            <br><small>bank2</small>
+                        </button>
+                    </div>
+                    <div class="col-4">
+                        <button type="button" class="btn btn-sm btn-outline-secondary w-100" onclick="selectIcon('bi-laptop')">
+                            <i class="bi bi-laptop fs-4"></i>
+                            <br><small>laptop</small>
+                        </button>
+                    </div>
+                    <div class="col-4">
+                        <button type="button" class="btn btn-sm btn-outline-secondary w-100" onclick="selectIcon('bi-heart-pulse')">
+                            <i class="bi bi-heart-pulse fs-4"></i>
+                            <br><small>pulse</small>
+                        </button>
+                    </div>
+                    <div class="col-4">
+                        <button type="button" class="btn btn-sm btn-outline-secondary w-100" onclick="selectIcon('bi-cart4')">
+                            <i class="bi bi-cart4 fs-4"></i>
+                            <br><small>cart</small>
+                        </button>
+                    </div>
+                    <div class="col-4">
+                        <button type="button" class="btn btn-sm btn-outline-secondary w-100" onclick="selectIcon('bi-car-front')">
+                            <i class="bi bi-car-front fs-4"></i>
+                            <br><small>car</small>
+                        </button>
+                    </div>
+                    <div class="col-4">
+                        <button type="button" class="btn btn-sm btn-outline-secondary w-100" onclick="selectIcon('bi-lightning-charge')">
+                            <i class="bi bi-lightning-charge fs-4"></i>
+                            <br><small>energy</small>
+                        </button>
+                    </div>
+                    <div class="col-4">
+                        <button type="button" class="btn btn-sm btn-outline-secondary w-100" onclick="selectIcon('bi-telephone')">
+                            <i class="bi bi-telephone fs-4"></i>
+                            <br><small>phone</small>
+                        </button>
+                    </div>
+                    <div class="col-4">
+                        <button type="button" class="btn btn-sm btn-outline-secondary w-100" onclick="selectIcon('bi-gem')">
+                            <i class="bi bi-gem fs-4"></i>
+                            <br><small>gem</small>
+                        </button>
+                    </div>
+                    <div class="col-4">
+                        <button type="button" class="btn btn-sm btn-outline-secondary w-100" onclick="selectIcon('bi-buildings')">
+                            <i class="bi bi-buildings fs-4"></i>
+                            <br><small>build</small>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('=== SECTOR FORM DEBUG ===');
+    console.log('DOM loaded successfully');
+
+    const form = document.querySelector('form');
+    const nameInput = document.getElementById('name');
+    const descriptionInput = document.getElementById('description');
+    const iconInput = document.getElementById('icon');
+    const colorInput = document.getElementById('color');
+    const colorPicker = document.getElementById('colorPicker');
+
+    const previewName = document.getElementById('previewName');
+    const previewDescription = document.getElementById('previewDescription');
+    const previewIcon = document.getElementById('previewIcon');
+    const iconPreview = document.getElementById('iconPreview');
+
+    console.log('Form found:', form !== null);
+    console.log('Form action:', form ? form.action : 'N/A');
+    console.log('Form method:', form ? form.method : 'N/A');
+
+    // Check CSRF token
+    const csrfToken = document.querySelector('input[name="csrf_token"]');
+    console.log('CSRF token found:', csrfToken !== null);
+    console.log('CSRF token value:', csrfToken ? csrfToken.value.substring(0, 20) + '...' : 'N/A');
+
+    // Get submit button
+    const submitBtn = document.getElementById('submitBtn');
+    console.log('Submit button found:', submitBtn !== null);
+
+    // Add button click event listener for debugging
+    if (submitBtn) {
+        submitBtn.addEventListener('click', function(e) {
+            console.log('=== SUBMIT BUTTON CLICKED ===');
+            console.log('Button type:', submitBtn.type);
+            console.log('Button disabled:', submitBtn.disabled);
+        });
+    }
+
+    // Add form submit event listener for debugging
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            console.log('=== FORM SUBMIT EVENT TRIGGERED ===');
+            console.log('Name value:', nameInput.value);
+            console.log('Description value:', descriptionInput.value);
+            console.log('Icon value:', iconInput.value);
+            console.log('Color value:', colorInput.value);
+            console.log('CSRF token:', csrfToken ? csrfToken.value.substring(0, 20) + '...' : 'missing');
+            console.log('Form validation valid:', form.checkValidity());
+
+            // Check if HTML5 validation will prevent submission
+            if (!form.checkValidity()) {
+                console.error('Form validation failed!');
+                console.log('Invalid fields:', Array.from(form.elements).filter(el => !el.validity.valid));
+                // Don't prevent default - let browser show validation messages
+            } else {
+                console.log('Form is valid, submitting...');
+            }
+
+            // Let the form submit naturally
+            // Don't prevent default unless debugging
+        });
+    } else {
+        console.error('CRITICAL: Form element not found!');
+    }
+
+    // Update preview as user types
+    nameInput.addEventListener('input', function() {
+        previewName.textContent = this.value || 'Sector Name';
+    });
+
+    descriptionInput.addEventListener('input', function() {
+        previewDescription.textContent = this.value || 'Sector description will appear here';
+    });
+
+    iconInput.addEventListener('input', function() {
+        const iconClass = this.value.trim();
+        previewIcon.className = 'bi fs-1 ' + iconClass;
+        iconPreview.className = 'bi ' + iconClass;
+    });
+
+    colorInput.addEventListener('input', function() {
+        previewIcon.style.color = this.value;
+        colorPicker.value = this.value;
+    });
+
+    colorPicker.addEventListener('input', function() {
+        colorInput.value = this.value;
+        previewIcon.style.color = this.value;
+    });
+
+    console.log('All event listeners attached');
+});
+
+function selectIcon(iconClass) {
+    console.log('Selecting icon:', iconClass);
+    document.getElementById('icon').value = iconClass;
+    document.getElementById('icon').dispatchEvent(new Event('input'));
+}
+</script>
+{% endblock %}
