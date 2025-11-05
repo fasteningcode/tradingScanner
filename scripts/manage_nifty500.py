@@ -3,9 +3,16 @@
 Management script for NIFTY 500 stocks list
 """
 
+import sys
+import os
+from datetime import datetime
+
+# Add the project root directory to the path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+
 from app import create_app, db
 from app.models import Nifty500List, Instrument
-from datetime import datetime
 
 # NIFTY 500 stock symbols
 NIFTY_500_SYMBOLS = [

@@ -28,6 +28,7 @@
             <div class="small">Connected as: {{ current_user.kite_user_id }}</div>
         </div>
         <form method="POST" action="{{ url_for('kite.disconnect') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-sm btn-outline-success" onclick="return confirm('Are you sure you want to disconnect from Kite?');">
                 <i class="bi bi-plug"></i> Disconnect
             </button>

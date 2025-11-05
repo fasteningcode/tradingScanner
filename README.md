@@ -59,11 +59,15 @@ V1/
 ├── app/                  # Application package
 │   ├── templates/        # HTML templates
 │   ├── static/          # CSS, JS, images
-│   ├── auth.py          # Authentication routes
-│   ├── dashboard.py     # Dashboard routes
-│   ├── models.py        # Database models
-│   └── forms.py         # WTForms
-├── docs/               # Full documentation
+│   └── *.py             # Application modules
+├── tests/               # Test files
+├── scripts/             # Utility & migration scripts
+├── docs/                # Documentation
+│   ├── archive/         # Historical docs
+│   └── *.md            # Active documentation
+├── migrations/          # Database migrations
+├── instance/            # Database files
+├── logs/                # Application logs
 ├── config.py           # Configuration
 ├── run.py              # Entry point
 └── requirements.txt    # Dependencies
@@ -71,7 +75,9 @@ V1/
 
 ## Documentation
 
-For complete documentation, see [docs/README.md](docs/README.md)
+- [Quick Start Guide](docs/QUICK_START.md) - Get started quickly
+- [Project Structure](docs/PROJECT_STRUCTURE.md) - Detailed structure documentation
+- [Developer Documentation](docs/README.md) - Full documentation
 
 ## Technologies
 

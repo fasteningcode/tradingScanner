@@ -3,8 +3,15 @@
 Migration script to add is_nifty500 column to instruments table
 """
 
-from app import create_app, db
+import sys
+import os
 import sqlite3
+
+# Add the project root directory to the path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+
+from app import create_app, db
 
 def add_nifty500_column():
     """Add is_nifty500 column to instruments table"""

@@ -310,6 +310,7 @@
                                             <i class="bi bi-check-circle me-2"></i>Validate Token
                                         </button>
                                         <form method="POST" action="{{ url_for('settings.clear_kite_credentials') }}" class="d-inline">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to clear all Kite Connect credentials?');">
                                                 <i class="bi bi-x-circle me-2"></i>Clear Credentials
                                             </button>
@@ -624,6 +625,13 @@
                                             <i class="bi bi-x-circle me-2"></i>Cancel Download
                                         </button>
                                     </form>
+
+                                    <form method="POST" action="{{ url_for('settings.force_reset_downloads') }}" style="display: inline;" class="ms-2">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('This will force cancel ALL pending/running/paused downloads. Are you sure?');" title="Force reset all stuck download tasks">
+                                            <i class="bi bi-arrow-clockwise me-1"></i>Force Reset
+                                        </button>
+                                    </form>
                                 </div>
                             </div>
                         </div>
@@ -682,6 +690,103 @@
                                 <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#clearDataModal">
                                     <i class="bi bi-trash me-2"></i>Clear All Historical Data
                                 </button>
+                            </div>
+                        </div>
+
+                        <!-- Market Cap Data -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="bi bi-cash-coin me-2"></i>Market Cap Data
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <p class="text-muted mb-3">
+                                    Fetch Total Market Cap and Free Float Market Cap data from NSE for all NIFTY 500 stocks.
+                                    Rate limited to 1 request per second to avoid server overload.
+                                </p>
+
+                                <!-- Statistics -->
+                                <div class="row mb-4">
+                                    <div class="col-md-4 mb-3">
+                                        <div class="p-3 bg-light rounded">
+                                            <h6 class="mb-2">Stocks with Data</h6>
+                                            <p class="mb-0">
+                                                <strong class="text-primary" id="mcStocksCount">0</strong>
+                                            </p>
+                                            <small class="text-muted">Out of 503 stocks</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <div class="p-3 bg-light rounded">
+                                            <h6 class="mb-2">Coverage</h6>
+                                            <p class="mb-0">
+                                                <strong class="text-primary" id="mcCoverage">0%</strong>
+                                            </p>
+                                            <small class="text-muted">Data availability</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <div class="p-3 bg-light rounded">
+                                            <h6 class="mb-2">Last Updated</h6>
+                                            <p class="mb-0">
+                                                <strong class="text-primary" id="mcLastUpdated">Never</strong>
+                                            </p>
+                                            <small class="text-muted">Most recent fetch</small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Progress Section (hidden by default) -->
+                                <div id="marketCapProgress" class="mb-3" style="display: none;">
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span>
+                                            <strong id="mcCurrentStock">-</strong>
+                                        </span>
+                                        <span>
+                                            <strong id="mcProgressText">0 / 0</strong> (0%)
+                                        </span>
+                                    </div>
+                                    <div class="progress mb-2" style="height: 25px;">
+                                        <div id="mcProgressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+                                             role="progressbar"
+                                             style="width: 0%"
+                                             aria-valuenow="0"
+                                             aria-valuemin="0"
+                                             aria-valuemax="100">
+                                            <span id="mcProgressPercent">0%</span>
+                                        </div>
+                                    </div>
+                                    <div class="small text-muted">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        Success: <span id="mcSuccessCount">0</span> |
+                                        Failed: <span id="mcFailedCount">0</span> |
+                                        Rate: 1 request/second
+                                    </div>
+                                </div>
+
+                                <!-- Failed Stocks Alert (hidden by default) -->
+                                <div id="mcFailedStocksAlert" class="alert alert-warning" style="display: none;">
+                                    <h6><i class="bi bi-exclamation-triangle me-2"></i>Failed Stocks</h6>
+                                    <div id="mcFailedStocksList" class="small"></div>
+                                </div>
+
+                                <!-- Control Buttons -->
+                                <div class="btn-group" role="group">
+                                    <button type="button" id="startMarketCapFetch" class="btn btn-success">
+                                        <i class="bi bi-play-fill me-2"></i>Start Fetch
+                                    </button>
+                                    <button type="button" id="cancelMarketCapFetch" class="btn btn-danger" style="display: none;">
+                                        <i class="bi bi-stop-fill me-2"></i>Cancel
+                                    </button>
+                                </div>
+
+                                <div class="mt-3">
+                                    <small class="text-muted">
+                                        <i class="bi bi-clock me-1"></i>
+                                        Estimated time: ~8-10 minutes for all 503 stocks (1 request/second)
+                                    </small>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -975,14 +1080,32 @@
         // Function to update download status
         function updateDownloadStatus() {
             fetch('{{ url_for("settings.download_status") }}')
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
+                    console.log('Download status response:', data);
                     if (data.success) {
                         const activeTask = data.active_task;
                         const storageStats = data.storage_stats;
 
                         // Update storage statistics
-                        updateStorageStats(storageStats);
+                        if (storageStats) {
+                            updateStorageStats(storageStats);
+                        } else {
+                            console.warn('No storage stats in response');
+                            updateStorageStats({
+                                estimated_size_mb: 0,
+                                total_records: 0,
+                                stocks_with_data: 0,
+                                total_stocks: 0,
+                                earliest_date: null,
+                                latest_date: null
+                            });
+                        }
 
                         // Update download UI based on task status
                         if (activeTask) {
@@ -992,94 +1115,157 @@
                             showIdleStatus();
                             hideGlobalBanner();
                         }
+                    } else {
+                        console.error('API returned success=false:', data.error);
+                        // Show error state
+                        showErrorState(data.error);
                     }
                 })
                 .catch(error => {
                     console.error('Error fetching download status:', error);
+                    // Show error in UI
+                    showErrorState(error.message);
                 });
+        }
+
+        // Function to show error state
+        function showErrorState(errorMsg) {
+            const storageSize = document.getElementById('storageSize');
+            if (storageSize) storageSize.textContent = 'Error';
+
+            const dataPoints = document.getElementById('dataPoints');
+            if (dataPoints) dataPoints.textContent = 'Error';
+
+            const stockCoverage = document.getElementById('stockCoverage');
+            if (stockCoverage) stockCoverage.textContent = 'Error / Error';
+
+            console.error('Status update error:', errorMsg);
         }
 
         // Function to update storage stats
         function updateStorageStats(stats) {
-            document.getElementById('storageSize').textContent = stats.estimated_size_mb + ' MB';
-            document.getElementById('dataPoints').textContent = stats.total_records.toLocaleString();
-            document.getElementById('stockCoverage').textContent = `${stats.stocks_with_data} / ${stats.total_stocks}`;
+            const storageSize = document.getElementById('storageSize');
+            if (storageSize) storageSize.textContent = stats.estimated_size_mb + ' MB';
 
-            if (stats.earliest_date && stats.latest_date) {
-                const earliest = new Date(stats.earliest_date).toLocaleDateString();
-                const latest = new Date(stats.latest_date).toLocaleDateString();
-                document.getElementById('dateRange').textContent = `${earliest} - ${latest}`;
-            } else {
-                document.getElementById('dateRange').textContent = 'N/A';
+            const dataPoints = document.getElementById('dataPoints');
+            if (dataPoints) dataPoints.textContent = stats.total_records.toLocaleString();
+
+            const stockCoverage = document.getElementById('stockCoverage');
+            if (stockCoverage) stockCoverage.textContent = `${stats.stocks_with_data} / ${stats.total_stocks}`;
+
+            const dateRange = document.getElementById('dateRange');
+            if (dateRange) {
+                if (stats.earliest_date && stats.latest_date) {
+                    const earliest = new Date(stats.earliest_date).toLocaleDateString();
+                    const latest = new Date(stats.latest_date).toLocaleDateString();
+                    dateRange.textContent = `${earliest} - ${latest}`;
+                } else {
+                    dateRange.textContent = 'N/A';
+                }
             }
         }
 
         // Function to update download UI
         function updateDownloadUI(task, etaSeconds) {
+            // Check if we're on the settings page
+            const idleStatus = document.getElementById('idleStatus');
+            const activeDownloadStatus = document.getElementById('activeDownloadStatus');
+
+            if (!idleStatus || !activeDownloadStatus) {
+                return; // Not on settings page
+            }
+
             // Show/hide appropriate status containers
-            document.getElementById('idleStatus').style.display = 'none';
-            document.getElementById('activeDownloadStatus').style.display = 'block';
+            idleStatus.style.display = 'none';
+            activeDownloadStatus.style.display = 'block';
 
             // Update status badge
             const statusBadge = document.getElementById('downloadStatusBadge');
-            statusBadge.textContent = task.status.charAt(0).toUpperCase() + task.status.slice(1);
-            statusBadge.className = 'badge';
+            if (statusBadge) {
+                statusBadge.textContent = task.status.charAt(0).toUpperCase() + task.status.slice(1);
+                statusBadge.className = 'badge';
 
-            switch(task.status) {
-                case 'running':
-                    statusBadge.classList.add('bg-primary');
-                    break;
-                case 'paused':
-                    statusBadge.classList.add('bg-warning');
-                    break;
-                case 'completed':
-                    statusBadge.classList.add('bg-success');
-                    break;
-                case 'failed':
-                    statusBadge.classList.add('bg-danger');
-                    break;
-                case 'cancelled':
-                    statusBadge.classList.add('bg-secondary');
-                    break;
-                default:
-                    statusBadge.classList.add('bg-info');
+                switch(task.status) {
+                    case 'running':
+                        statusBadge.classList.add('bg-primary');
+                        break;
+                    case 'paused':
+                        statusBadge.classList.add('bg-warning');
+                        break;
+                    case 'completed':
+                        statusBadge.classList.add('bg-success');
+                        break;
+                    case 'failed':
+                        statusBadge.classList.add('bg-danger');
+                        break;
+                    case 'cancelled':
+                        statusBadge.classList.add('bg-secondary');
+                        break;
+                    default:
+                        statusBadge.classList.add('bg-info');
+                }
             }
 
             // Update current stock name
-            document.getElementById('currentStockName').textContent =
-                task.current_stock_symbol ? `Downloading ${task.current_stock_symbol}...` : '';
+            const currentStockName = document.getElementById('currentStockName');
+            if (currentStockName) {
+                currentStockName.textContent =
+                    task.current_stock_symbol ? `Downloading ${task.current_stock_symbol}...` : '';
+            }
 
             // Update progress text
             const totalProcessed = task.completed_stocks + task.failed_stocks + task.skipped_stocks;
-            document.getElementById('downloadProgressText').textContent =
-                `${totalProcessed} / ${task.total_stocks} stocks`;
+            const downloadProgressText = document.getElementById('downloadProgressText');
+            if (downloadProgressText) {
+                downloadProgressText.textContent = `${totalProcessed} / ${task.total_stocks} stocks`;
+            }
 
             // Update progress bar
             const progressBar = document.getElementById('downloadProgressBar');
             const progressPercentage = Math.round(task.progress_percentage);
-            progressBar.style.width = progressPercentage + '%';
-            progressBar.setAttribute('aria-valuenow', progressPercentage);
-            document.getElementById('progressPercentage').textContent = progressPercentage + '%';
+            if (progressBar) {
+                progressBar.style.width = progressPercentage + '%';
+                progressBar.setAttribute('aria-valuenow', progressPercentage);
+            }
+            const progressPercentageText = document.getElementById('progressPercentage');
+            if (progressPercentageText) {
+                progressPercentageText.textContent = progressPercentage + '%';
+            }
 
             // Update statistics
-            document.getElementById('completedCount').textContent = task.completed_stocks;
-            document.getElementById('failedCount').textContent = task.failed_stocks;
-            document.getElementById('skippedCount').textContent = task.skipped_stocks;
+            const completedCount = document.getElementById('completedCount');
+            if (completedCount) completedCount.textContent = task.completed_stocks;
+
+            const failedCount = document.getElementById('failedCount');
+            if (failedCount) failedCount.textContent = task.failed_stocks;
+
+            const skippedCount = document.getElementById('skippedCount');
+            if (skippedCount) skippedCount.textContent = task.skipped_stocks;
 
             // Update ETA
-            if (etaSeconds && task.status === 'running') {
-                const hours = Math.floor(etaSeconds / 3600);
-                const minutes = Math.floor((etaSeconds % 3600) / 60);
-                const seconds = Math.floor(etaSeconds % 60);
-                document.getElementById('etaDisplay').textContent =
-                    hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m ${seconds}s`;
-            } else {
-                document.getElementById('etaDisplay').textContent = '--:--';
+            const etaDisplay = document.getElementById('etaDisplay');
+            if (etaDisplay) {
+                if (etaSeconds && task.status === 'running') {
+                    const hours = Math.floor(etaSeconds / 3600);
+                    const minutes = Math.floor((etaSeconds % 3600) / 60);
+                    const seconds = Math.floor(etaSeconds % 60);
+                    etaDisplay.textContent =
+                        hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m ${seconds}s`;
+                } else {
+                    etaDisplay.textContent = '--:--';
+                }
             }
 
             // Update records and API calls
-            document.getElementById('recordsCount').textContent = task.total_records_downloaded.toLocaleString();
-            document.getElementById('apiCallsCount').textContent = task.total_api_calls.toLocaleString();
+            const recordsCount = document.getElementById('recordsCount');
+            if (recordsCount) {
+                recordsCount.textContent = task.total_records_downloaded.toLocaleString();
+            }
+
+            const apiCallsCount = document.getElementById('apiCallsCount');
+            if (apiCallsCount) {
+                apiCallsCount.textContent = task.total_api_calls.toLocaleString();
+            }
 
             // Update button visibility
             updateButtonVisibility(task);
@@ -1091,6 +1277,11 @@
             const pauseBtn = document.getElementById('pauseDownloadForm');
             const resumeBtn = document.getElementById('resumeDownloadForm');
             const cancelBtn = document.getElementById('cancelDownloadForm');
+
+            // Check if elements exist (they only exist on settings page)
+            if (!startBtn || !pauseBtn || !resumeBtn || !cancelBtn) {
+                return;
+            }
 
             // Hide all first
             startBtn.style.display = 'none';
@@ -1117,17 +1308,26 @@
 
         // Function to show idle status
         function showIdleStatus() {
-            document.getElementById('idleStatus').style.display = 'block';
-            document.getElementById('activeDownloadStatus').style.display = 'none';
-            document.getElementById('startDownloadForm').style.display = 'inline';
-            document.getElementById('pauseDownloadForm').style.display = 'none';
-            document.getElementById('resumeDownloadForm').style.display = 'none';
-            document.getElementById('cancelDownloadForm').style.display = 'none';
+            const idleStatus = document.getElementById('idleStatus');
+            const activeDownloadStatus = document.getElementById('activeDownloadStatus');
+            const startDownloadForm = document.getElementById('startDownloadForm');
+            const pauseDownloadForm = document.getElementById('pauseDownloadForm');
+            const resumeDownloadForm = document.getElementById('resumeDownloadForm');
+            const cancelDownloadForm = document.getElementById('cancelDownloadForm');
+
+            if (idleStatus) idleStatus.style.display = 'block';
+            if (activeDownloadStatus) activeDownloadStatus.style.display = 'none';
+            if (startDownloadForm) startDownloadForm.style.display = 'inline';
+            if (pauseDownloadForm) pauseDownloadForm.style.display = 'none';
+            if (resumeDownloadForm) resumeDownloadForm.style.display = 'none';
+            if (cancelDownloadForm) cancelDownloadForm.style.display = 'none';
         }
 
         // Function to update global banner
         function updateGlobalBanner(task) {
             const banner = document.getElementById('globalDownloadBanner');
+
+            if (!banner) return; // Banner doesn't exist on this page
 
             if (task.status === 'running' || task.status === 'paused') {
                 banner.style.display = 'block';
@@ -1135,14 +1335,18 @@
                 const progressText = document.getElementById('bannerProgressText');
                 const statusText = document.getElementById('bannerStatusText');
 
-                progressText.textContent = `${Math.round(task.progress_percentage)}% complete (${task.completed_stocks + task.failed_stocks + task.skipped_stocks}/${task.total_stocks} stocks)`;
+                if (progressText) {
+                    progressText.textContent = `${Math.round(task.progress_percentage)}% complete (${task.completed_stocks + task.failed_stocks + task.skipped_stocks}/${task.total_stocks} stocks)`;
+                }
 
-                if (task.status === 'running') {
-                    statusText.textContent = task.current_stock_symbol ?
-                        `Currently downloading: ${task.current_stock_symbol}` :
-                        'Processing...';
-                } else if (task.status === 'paused') {
-                    statusText.textContent = 'Download paused - you can resume from Settings';
+                if (statusText) {
+                    if (task.status === 'running') {
+                        statusText.textContent = task.current_stock_symbol ?
+                            `Currently downloading: ${task.current_stock_symbol}` :
+                            'Processing...';
+                    } else if (task.status === 'paused') {
+                        statusText.textContent = 'Download paused - you can resume from Settings';
+                    }
                 }
             } else {
                 banner.style.display = 'none';
@@ -1151,7 +1355,8 @@
 
         // Function to hide global banner
         function hideGlobalBanner() {
-            document.getElementById('globalDownloadBanner').style.display = 'none';
+            const banner = document.getElementById('globalDownloadBanner');
+            if (banner) banner.style.display = 'none';
         }
 
         // Start polling if on historical tab
@@ -1192,6 +1397,196 @@
             }
             if (globalBannerPollInterval) {
                 clearInterval(globalBannerPollInterval);
+            }
+        });
+
+        // ========================================================================
+        // MARKET CAP FETCH FUNCTIONALITY
+        // ========================================================================
+
+        let marketCapPollInterval = null;
+        let currentMarketCapTaskId = null;
+
+        // Start market cap fetch
+        const startMarketCapBtn = document.getElementById('startMarketCapFetch');
+        const cancelMarketCapBtn = document.getElementById('cancelMarketCapFetch');
+
+        if (startMarketCapBtn) {
+            startMarketCapBtn.addEventListener('click', function() {
+                fetch('{{ url_for("settings.start_marketcap_fetch") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token() }}'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        currentMarketCapTaskId = data.task_id;
+                        console.log('Market cap fetch started:', data.task_id);
+
+                        // Start polling for status
+                        if (marketCapPollInterval) {
+                            clearInterval(marketCapPollInterval);
+                        }
+                        marketCapPollInterval = setInterval(updateMarketCapStatus, 2000);
+
+                        // Update UI immediately
+                        updateMarketCapStatus();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error starting market cap fetch:', error);
+                    alert('Failed to start market cap fetch. Please try again.');
+                });
+            });
+        }
+
+        // Cancel market cap fetch
+        if (cancelMarketCapBtn) {
+            cancelMarketCapBtn.addEventListener('click', function() {
+                if (!currentMarketCapTaskId) return;
+
+                if (confirm('Are you sure you want to cancel the market cap fetch?')) {
+                    fetch(`{{ url_for("settings.cancel_marketcap_fetch", task_id=0) }}`.replace('0', currentMarketCapTaskId), {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': '{{ csrf_token() }}'
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            console.log('Market cap fetch cancelled');
+                            updateMarketCapStatus();
+                        } else {
+                            alert('Error: ' + data.error);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error cancelling market cap fetch:', error);
+                    });
+                }
+            });
+        }
+
+        // Update market cap status
+        function updateMarketCapStatus() {
+            fetch('{{ url_for("settings.marketcap_fetch_status") }}')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const task = data.task;
+                        const stats = data.statistics;
+
+                        // Update statistics
+                        document.getElementById('mcStocksCount').textContent = stats.total_stocks || 0;
+                        document.getElementById('mcCoverage').textContent = (stats.coverage_percentage || 0) + '%';
+
+                        if (stats.latest_update) {
+                            const lastUpdate = new Date(stats.latest_update);
+                            document.getElementById('mcLastUpdated').textContent = lastUpdate.toLocaleString();
+                        } else {
+                            document.getElementById('mcLastUpdated').textContent = 'Never';
+                        }
+
+                        // Update task progress if there's an active task
+                        if (task && (task.status === 'running' || task.status === 'pending')) {
+                            currentMarketCapTaskId = task.id;
+
+                            // Show progress section
+                            document.getElementById('marketCapProgress').style.display = 'block';
+
+                            // Update progress
+                            const progress = task.progress_percentage || 0;
+                            document.getElementById('mcProgressBar').style.width = progress + '%';
+                            document.getElementById('mcProgressBar').setAttribute('aria-valuenow', progress);
+                            document.getElementById('mcProgressPercent').textContent = Math.round(progress) + '%';
+                            document.getElementById('mcProgressText').textContent =
+                                `${task.completed_stocks} / ${task.total_stocks}`;
+                            document.getElementById('mcCurrentStock').textContent =
+                                task.current_stock_symbol || '-';
+                            document.getElementById('mcSuccessCount').textContent = task.total_success || 0;
+                            document.getElementById('mcFailedCount').textContent = task.failed_stocks || 0;
+
+                            // Show/hide buttons
+                            startMarketCapBtn.style.display = 'none';
+                            cancelMarketCapBtn.style.display = 'inline';
+
+                            // Show failed stocks if any
+                            if (task.failed_stocks > 0 && task.failed_stocks_list && task.failed_stocks_list.length > 0) {
+                                const failedAlert = document.getElementById('mcFailedStocksAlert');
+                                const failedList = document.getElementById('mcFailedStocksList');
+
+                                failedAlert.style.display = 'block';
+                                failedList.textContent = task.failed_stocks_list.join(', ');
+                            }
+                        } else if (task && task.status === 'completed') {
+                            // Task completed
+                            document.getElementById('marketCapProgress').style.display = 'block';
+
+                            const progress = 100;
+                            document.getElementById('mcProgressBar').style.width = progress + '%';
+                            document.getElementById('mcProgressBar').setAttribute('aria-valuenow', progress);
+                            document.getElementById('mcProgressPercent').textContent = progress + '%';
+                            document.getElementById('mcProgressText').textContent =
+                                `${task.completed_stocks} / ${task.total_stocks}`;
+                            document.getElementById('mcCurrentStock').textContent = 'Completed';
+                            document.getElementById('mcSuccessCount').textContent = task.total_success || 0;
+                            document.getElementById('mcFailedCount').textContent = task.failed_stocks || 0;
+
+                            // Remove animation
+                            document.getElementById('mcProgressBar').classList.remove('progress-bar-animated');
+
+                            // Show/hide buttons
+                            startMarketCapBtn.style.display = 'inline';
+                            cancelMarketCapBtn.style.display = 'none';
+
+                            // Show failed stocks if any
+                            if (task.failed_stocks > 0 && task.failed_stocks_list && task.failed_stocks_list.length > 0) {
+                                const failedAlert = document.getElementById('mcFailedStocksAlert');
+                                const failedList = document.getElementById('mcFailedStocksList');
+
+                                failedAlert.style.display = 'block';
+                                failedList.textContent = task.failed_stocks_list.join(', ');
+                            }
+
+                            // Stop polling
+                            if (marketCapPollInterval) {
+                                clearInterval(marketCapPollInterval);
+                                marketCapPollInterval = null;
+                            }
+                        } else {
+                            // No active task or task cancelled/failed
+                            document.getElementById('marketCapProgress').style.display = 'none';
+                            document.getElementById('mcFailedStocksAlert').style.display = 'none';
+
+                            startMarketCapBtn.style.display = 'inline';
+                            cancelMarketCapBtn.style.display = 'none';
+
+                            // Stop polling
+                            if (marketCapPollInterval) {
+                                clearInterval(marketCapPollInterval);
+                                marketCapPollInterval = null;
+                            }
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching market cap status:', error);
+                });
+        }
+
+        // Initial status update
+        updateMarketCapStatus();
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (marketCapPollInterval) {
+                clearInterval(marketCapPollInterval);
             }
         });
     });

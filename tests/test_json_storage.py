@@ -3,8 +3,14 @@
 Test script to verify JSON storage functionality for historical data
 """
 import sys
+import os
 import json
 from datetime import datetime
+
+# Add the project root directory to the path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+
 from app import create_app, db
 from app.models import HistoricalData, Instrument
 

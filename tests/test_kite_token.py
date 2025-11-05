@@ -4,6 +4,11 @@ Test script to verify Kite token is valid and working
 """
 import sys
 import os
+
+# Add the project root directory to the path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+
 from app import create_app, db
 from app.models import User
 from kiteconnect import KiteConnect

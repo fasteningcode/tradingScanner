@@ -1,0 +1,534 @@
+"""
+NSE Market Cap Fetching Service
+
+This service fetches market capitalization data from NSE website for all stocks
+and stores it in the database. Uses Playwright for browser automation to bypass
+anti-scraping measures. Implements rate limiting (1 request per second).
+"""
+
+import time
+import json
+import threading
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
+from flask import current_app
+from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page
+from app import db
+from app.models import Instrument, StockInformation, MarketCapFetchTask
+
+
+# Global dictionary to track active fetch tasks
+active_fetch_tasks = {}
+
+
+class NSEMarketCapFetcher:
+    """
+    Fetches market cap data from NSE website using Playwright browser automation
+    """
+
+    # NSE URLs
+    NSE_BASE_URL = "https://www.nseindia.com"
+    NSE_QUOTE_URL = f"{NSE_BASE_URL}/get-quotes/equity"
+
+    def __init__(self, rate_limit: float = 1.0):
+        """
+        Initialize fetcher with Playwright browser
+
+        Args:
+            rate_limit: Minimum seconds between requests (default: 1.0)
+        """
+        self.rate_limit = rate_limit
+        self.last_request_time = 0
+        self.playwright = None
+        self.browser = None
+        self.context = None
+        self.page = None
+
+        # Initialize browser
+        self._init_browser()
+
+    def _init_browser(self):
+        """Initialize Playwright browser with proper settings"""
+        try:
+            current_app.logger.info("Initializing Playwright browser...")
+            self.playwright = sync_playwright().start()
+
+            # Launch browser in headless mode
+            self.browser = self.playwright.chromium.launch(
+                headless=True,
+                args=['--no-sandbox', '--disable-setuid-sandbox']
+            )
+
+            # Create browser context with realistic settings
+            self.context = self.browser.new_context(
+                viewport={'width': 1920, 'height': 1080'},
+                viewport={'width': 1920, 'height': 1080},
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                locale='en-US',
+                timezone_id='Asia/Kolkata'
+
+            # Create page
+            self.page = self.context.new_page()
+
+            # Visit NSE homepage first to establish session
+            current_app.logger.info("Visiting NSE homepage to establish session...")
+            self.page.goto(self.NSE_BASE_URL, wait_until='networkidle', timeout=30000)
+            time.sleep(2)  # Wait for cookies to be set
+
+            current_app.logger.info("Browser initialized successfully")
+
+        except Exception as e:
+            current_app.logger.error(f"Failed to initialize browser: {str(e)}")
+            self._cleanup_browser()
+            raise
+
+    def _cleanup_browser(self):
+        """Cleanup browser resources"""
+        try:
+            if self.page:
+                self.page.close()
+            if self.context:
+                self.context.close()
+            if self.browser:
+                self.browser.close()
+            if self.playwright:
+                self.playwright.stop()
+        except Exception as e:
+            current_app.logger.error(f"Error cleaning up browser: {str(e)}")
+
+    def _rate_limit_wait(self):
+        """Enforce rate limiting by waiting if necessary"""
+        current_time = time.time()
+        time_since_last_request = current_time - self.last_request_time
+
+        if time_since_last_request < self.rate_limit:
+            wait_time = self.rate_limit - time_since_last_request
+            time.sleep(wait_time)
+
+        self.last_request_time = time.time()
+
+    def fetch_stock_info(self, symbol: str) -> Optional[Dict]:
+        """
+        Fetch market cap information for a single stock from NSE using Playwright
+
+        Args:
+            symbol: Trading symbol (e.g., 'RELIANCE', 'TCS')
+
+        Returns:
+            Dictionary with market cap data or None if failed
+        """
+        # Enforce rate limiting
+        self._rate_limit_wait()
+
+        try:
+            # Build stock quote URL
+            url = f"{self.NSE_QUOTE_URL}?symbol={symbol}"
+
+            current_app.logger.info(f"Fetching market cap for {symbol} from {url}")
+
+            # Navigate to stock page
+            response = self.page.goto(url, wait_until='networkidle', timeout=30000)
+
+            if not response or response.status != 200:
+                current_app.logger.warning(
+                    f"Failed to load page for {symbol}: HTTP {response.status if response else 'None'}"
+                )
+                return None
+
+            # Wait for page to load and execute JavaScript
+            time.sleep(1)
+
+            # Try to extract data from API response by intercepting network requests
+            # or by extracting from page content
+            try:
+                # Method 1: Try to get data from the page's JavaScript context
+                # NSE loads data into window.__NUXT__ or similar global variable
+                market_data = self.page.evaluate("""() => {
+                    // Try to extract data from various possible locations
+                    if (window.__NUXT__ && window.__NUXT__.data && window.__NUXT__.data[0]) {
+                        return window.__NUXT__.data[0];
+                    }
+                    // Alternative: check for equity data in other locations
+                    if (window.equityData) {
+                        return window.equityData;
+                    }
+                    return null;
+                }""")
+
+                if market_data:
+                    # Extract market cap information from the data structure
+                    info = market_data.get('info', {}) if isinstance(market_data, dict) else {}
+                    metadata = market_data.get('metadata', {}) if isinstance(market_data, dict) else {}
+                    price_info = market_data.get('priceInfo', {}) if isinstance(market_data, dict) else {}
+
+                    # Extract company name
+                    company_name = metadata.get('companyName', symbol)
+
+                    # Extract market cap values (usually in lakhs, convert to crores)
+                    total_market_cap = None
+                    free_float_market_cap = None
+
+                    # Try to extract from different possible locations
+                    if 'marketCap' in info:
+                        total_market_cap = float(info['marketCap']) / 100
+                    elif 'totalMarketCap' in price_info:
+                        total_market_cap = float(price_info['totalMarketCap']) / 100
+
+                    if 'freeFloatMarketCap' in info:
+                        free_float_market_cap = float(info['freeFloatMarketCap']) / 100
+
+                    current_app.logger.info(
+                        f"Successfully fetched data for {symbol}: "
+                        f"TotalMC={total_market_cap}, FFMC={free_float_market_cap}"
+                    )
+
+                    return {
+                        'tradingsymbol': symbol,
+                        'company_name': company_name,
+                        'total_market_cap': total_market_cap,
+                        'free_float_market_cap': free_float_market_cap,
+                        'last_updated': datetime.utcnow()
+                    }
+                else:
+                    # Method 2: Try to extract from HTML elements
+                    current_app.logger.info(f"No JavaScript data found for {symbol}, trying HTML extraction")
+
+                    # Try to find market cap in the page content
+                    # NSE typically shows market cap in specific elements
+                    company_name = symbol
+                    try:
+                        company_elem = self.page.query_selector('h1.company-name, .company-info h1')
+                        if company_elem:
+                            company_name = company_elem.text_content().strip()
+                    except:
+                        pass
+
+                    # Look for market cap values in the page
+                    # This is a fallback and may not work for all cases
+                    total_market_cap = None
+                    free_float_market_cap = None
+
+                    current_app.logger.warning(
+                        f"Could not extract complete data for {symbol} from HTML"
+                    )
+
+                    # Return partial data if we at least got the company name
+                    if company_name != symbol:
+                        return {
+                            'tradingsymbol': symbol,
+                            'company_name': company_name,
+                            'total_market_cap': total_market_cap,
+                            'free_float_market_cap': free_float_market_cap,
+                            'last_updated': datetime.utcnow()
+                        }
+
+                    return None
+
+            except Exception as e:
+                current_app.logger.error(f"Error extracting data for {symbol}: {str(e)}")
+                return None
+
+        except Exception as e:
+            current_app.logger.error(f"Unexpected error fetching {symbol}: {str(e)}")
+            return None
+
+
+def create_marketcap_fetch_task(user_id: int) -> MarketCapFetchTask:
+    """
+    Create a new market cap fetch task
+
+    Args:
+        user_id: ID of the user initiating the fetch
+
+    Returns:
+        Created MarketCapFetchTask instance
+    """
+    # Get all NIFTY 500 stocks
+    instruments = Instrument.query.filter_by(
+        exchange='NSE',
+        instrument_type='EQ',
+        is_nifty500=True
+    ).all()
+
+    total_stocks = len(instruments)
+
+    # Create task
+    task = MarketCapFetchTask(
+        user_id=user_id,
+        status='pending',
+        total_stocks=total_stocks,
+        completed_stocks=0,
+        failed_stocks=0,
+        total_api_calls=0,
+        total_success=0,
+        failed_stocks_list='[]'
+    )
+
+    db.session.add(task)
+    db.session.commit()
+
+    current_app.logger.info(
+        f"Created market cap fetch task {task.id} for user {user_id} with {total_stocks} stocks"
+    )
+
+    return task
+
+
+def run_marketcap_fetch_task(task_id: int, app):
+    """
+    Background worker function to fetch market cap data for all stocks
+
+    Args:
+        task_id: ID of the MarketCapFetchTask to process
+        app: Flask application instance for context
+    """
+    fetcher = None  # Initialize fetcher variable for cleanup
+
+    with app.app_context():
+        try:
+            # Get the task
+            task = MarketCapFetchTask.query.get(task_id)
+            if not task:
+                current_app.logger.error(f"Task {task_id} not found")
+                return
+
+            # Mark task as running
+            task.status = 'running'
+            task.started_at = datetime.utcnow()
+            db.session.commit()
+
+            current_app.logger.info(f"Starting market cap fetch task {task_id}")
+
+            # Get all NIFTY 500 stocks
+            instruments = Instrument.query.filter_by(
+                exchange='NSE',
+                instrument_type='EQ',
+                is_nifty500=True
+            ).order_by(Instrument.tradingsymbol).all()
+
+            # Initialize fetcher with 1 request per second rate limit
+            current_app.logger.info("Initializing Playwright browser for market cap fetching...")
+            fetcher = NSEMarketCapFetcher(rate_limit=1.0)
+            current_app.logger.info("Browser initialized successfully")
+
+            failed_stocks = []
+            completed_count = 0
+            success_count = 0
+
+            # Process each stock
+            for instrument in instruments:
+                # Check if task was cancelled
+                db.session.refresh(task)
+                if task.status == 'cancelled':
+                    current_app.logger.info(f"Task {task_id} was cancelled")
+                    break
+
+                symbol = instrument.tradingsymbol
+                task.current_stock_symbol = symbol
+                db.session.commit()
+
+                current_app.logger.info(f"Task {task_id}: Fetching data for {symbol}")
+
+                # Fetch market cap data
+                stock_data = fetcher.fetch_stock_info(symbol)
+                task.total_api_calls += 1
+
+                if stock_data:
+                    # Store or update in database
+                    stock_info = StockInformation.query.filter_by(
+                        tradingsymbol=symbol
+                    ).first()
+
+                    if stock_info:
+                        # Update existing record
+                        stock_info.company_name = stock_data.get('company_name')
+                        stock_info.total_market_cap = stock_data.get('total_market_cap')
+                        stock_info.free_float_market_cap = stock_data.get('free_float_market_cap')
+                        stock_info.last_updated = stock_data.get('last_updated')
+                        stock_info.updated_at = datetime.utcnow()
+                    else:
+                        # Create new record
+                        stock_info = StockInformation(
+                            tradingsymbol=symbol,
+                            company_name=stock_data.get('company_name'),
+                            total_market_cap=stock_data.get('total_market_cap'),
+                            free_float_market_cap=stock_data.get('free_float_market_cap'),
+                            last_updated=stock_data.get('last_updated')
+                        )
+                        db.session.add(stock_info)
+
+                    success_count += 1
+                    current_app.logger.info(f"Task {task_id}: SUCCESS for {symbol}")
+                else:
+                    # Failed to fetch
+                    failed_stocks.append(symbol)
+                    task.failed_stocks += 1
+                    current_app.logger.warning(f"Task {task_id}: FAILED for {symbol}")
+
+                completed_count += 1
+                task.completed_stocks = completed_count
+                task.total_success = success_count
+                task.progress_percentage = (completed_count / task.total_stocks) * 100
+                task.failed_stocks_list = json.dumps(failed_stocks)
+
+                # Commit progress every stock
+                db.session.commit()
+
+            # Task completed
+            task.status = 'completed'
+            task.completed_at = datetime.utcnow()
+            task.current_stock_symbol = None
+            db.session.commit()
+
+            current_app.logger.info(
+                f"Market cap fetch task {task_id} completed: "
+                f"{success_count} success, {len(failed_stocks)} failed"
+            )
+
+        except Exception as e:
+            current_app.logger.error(f"Error in market cap fetch task {task_id}: {str(e)}")
+            import traceback
+            current_app.logger.error(f"Traceback: {traceback.format_exc()}")
+            try:
+                task = MarketCapFetchTask.query.get(task_id)
+                if task:
+                    task.status = 'failed'
+                    task.error_message = str(e)
+                    task.completed_at = datetime.utcnow()
+                    db.session.commit()
+            except:
+                pass
+        finally:
+            # Cleanup browser resources
+            if fetcher:
+                current_app.logger.info("Cleaning up Playwright browser...")
+                try:
+                    fetcher._cleanup_browser()
+                    current_app.logger.info("Browser cleanup completed")
+                except Exception as e:
+                    current_app.logger.error(f"Error during browser cleanup: {str(e)}")
+
+            # Remove from active tasks
+            if task_id in active_fetch_tasks:
+                del active_fetch_tasks[task_id]
+
+
+def start_marketcap_fetch(user_id: int, app) -> Tuple[bool, str, Optional[int]]:
+    """
+    Start a market cap fetch task in background thread
+
+    Args:
+        user_id: ID of the user initiating the fetch
+        app: Flask application instance
+
+    Returns:
+        Tuple of (success, message, task_id)
+    """
+    # Check if there's already an active task for this user
+    existing_task = MarketCapFetchTask.query.filter(
+        MarketCapFetchTask.user_id == user_id,
+        MarketCapFetchTask.status.in_(['pending', 'running'])
+    ).first()
+
+    if existing_task:
+        return False, "A market cap fetch is already in progress", existing_task.id
+
+    # Create new task
+    task = create_marketcap_fetch_task(user_id)
+
+    # Start background thread
+    thread = threading.Thread(
+        target=run_marketcap_fetch_task,
+        args=(task.id, app),
+        daemon=True
+    )
+    thread.start()
+
+    # Track active task
+    active_fetch_tasks[task.id] = {
+        'thread': thread,
+        'started_at': datetime.utcnow()
+    }
+
+    current_app.logger.info(f"Started market cap fetch task {task.id} in background")
+
+    return True, "Market cap fetch started successfully", task.id
+
+
+def get_marketcap_fetch_status(user_id: int) -> Optional[Dict]:
+    """
+    Get status of the current market cap fetch task for a user
+
+    Args:
+        user_id: ID of the user
+
+    Returns:
+        Dictionary with task status or None if no active task
+    """
+    task = MarketCapFetchTask.query.filter_by(user_id=user_id).order_by(
+        MarketCapFetchTask.created_at.desc()
+    ).first()
+
+    if not task:
+        return None
+
+    return task.to_dict()
+
+
+def cancel_marketcap_fetch(task_id: int) -> Tuple[bool, str]:
+    """
+    Cancel a running market cap fetch task
+
+    Args:
+        task_id: ID of the task to cancel
+
+    Returns:
+        Tuple of (success, message)
+    """
+    task = MarketCapFetchTask.query.get(task_id)
+
+    if not task:
+        return False, "Task not found"
+
+    if task.status not in ['pending', 'running']:
+        return False, f"Task is not running (status: {task.status})"
+
+    # Mark as cancelled
+    task.status = 'cancelled'
+    task.completed_at = datetime.utcnow()
+    db.session.commit()
+
+    current_app.logger.info(f"Cancelled market cap fetch task {task_id}")
+
+    return True, "Task cancelled successfully"
+
+
+def get_marketcap_statistics() -> Dict:
+    """
+    Get statistics about stored market cap data
+
+    Returns:
+        Dictionary with statistics
+    """
+    total_stocks = StockInformation.query.count()
+
+    stocks_with_total_mc = StockInformation.query.filter(
+        StockInformation.total_market_cap.isnot(None)
+    ).count()
+
+    stocks_with_ff_mc = StockInformation.query.filter(
+        StockInformation.free_float_market_cap.isnot(None)
+    ).count()
+
+    # Get most recent update
+    latest_update = StockInformation.query.order_by(
+        StockInformation.last_updated.desc()
+    ).first()
+
+    return {
+        'total_stocks': total_stocks,
+        'stocks_with_total_market_cap': stocks_with_total_mc,
+        'stocks_with_free_float_market_cap': stocks_with_ff_mc,
+        'latest_update': latest_update.last_updated.isoformat() if latest_update and latest_update.last_updated else None,
+        'coverage_percentage': round((total_stocks / 503 * 100), 2) if total_stocks > 0 else 0
+    }

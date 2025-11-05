@@ -6,9 +6,10 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required, current_user, logout_user
 from werkzeug.utils import secure_filename
 from app import db
-from app.models import User, HistoricalDataSettings, HistoricalData, DownloadTask, DownloadLog, Instrument
+from app.models import User, HistoricalDataSettings, HistoricalData, DownloadTask, DownloadLog, Instrument, StockInformation, MarketCapFetchTask
 from app.forms import BackupForm, RestoreDatabaseForm, EmergencyRestoreForm, KiteCredentialsForm
 from app.kite_auth import get_kite_client
+from app import marketcap_service
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/settings')
 
@@ -481,10 +482,16 @@ def update_historical_data_settings():
     return redirect(url_for('settings.index', tab='historical'))
 
 
-@settings_bp.route('/historical-data/clear', methods=['POST'])
+@settings_bp.route('/historical-data/clear', methods=['GET', 'POST'])
 @login_required
 def clear_historical_data():
     """Clear all historical data from the database"""
+    if request.method == 'GET':
+        # Show confirmation page for direct URL access
+        data_count = HistoricalData.query.count()
+        return render_template('settings/confirm_clear.html', data_count=data_count)
+
+    # POST request - actually clear the data
     try:
         # Delete all historical candle data
         deleted_count = HistoricalData.query.delete()
@@ -505,31 +512,173 @@ def clear_historical_data():
 @login_required
 def start_download():
     """Start a new historical data download task"""
+    # LOG: Request received
+    current_app.logger.info("=" * 80)
+    current_app.logger.info("START DOWNLOAD REQUEST RECEIVED")
+    current_app.logger.info(f"Request method: {request.method}")
+    current_app.logger.info(f"Request endpoint: /historical-data/start-download")
+    current_app.logger.info(f"User: {current_user.username} (ID: {current_user.id})")
+    current_app.logger.info(f"Database URI: {current_app.config.get('SQLALCHEMY_DATABASE_URI')}")
+    current_app.logger.info("=" * 80)
+
     try:
         from app.download_service import create_download_task, get_active_task, HistoricalDataDownloader
+        from app.kite_auth import get_kite_client
 
-        # Check if there's already an active task
-        active_task = get_active_task(current_user.id)
-        if active_task:
-            flash(f'You already have an active download task (Status: {active_task.status}).', 'warning')
+        current_app.logger.info("Successfully imported download_service and kite_auth modules")
+
+        # PRE-FLIGHT VALIDATION #1: Check Kite connection
+        current_app.logger.info("PRE-FLIGHT CHECK #1: Checking Kite connection...")
+        current_app.logger.info(f"  - current_user.kite_connected: {current_user.kite_connected}")
+        current_app.logger.info(f"  - current_user.kite_access_token exists: {bool(current_user.kite_access_token)}")
+        if current_user.kite_access_token:
+            current_app.logger.info(f"  - Token length: {len(current_user.kite_access_token)} characters")
+            current_app.logger.info(f"  - Token preview: {current_user.kite_access_token[:10]}...{current_user.kite_access_token[-10:]}")
+
+        if not current_user.kite_connected or not current_user.kite_access_token:
+            current_app.logger.warning("PRE-FLIGHT CHECK #1: FAILED - No Kite connection or token")
+            flash('Please connect to Zerodha Kite first before downloading historical data.', 'warning')
+            current_app.logger.info("Redirecting to: settings.index?tab=kite")
+            return redirect(url_for('settings.index', tab='kite'))
+
+        current_app.logger.info("PRE-FLIGHT CHECK #1: PASSED - Kite connection exists")
+
+        # PRE-FLIGHT VALIDATION #2: Verify Kite token is valid
+        current_app.logger.info("PRE-FLIGHT CHECK #2: Verifying Kite token validity...")
+        try:
+            token_valid = current_user.is_kite_token_valid()
+            current_app.logger.info(f"  - Token valid result: {token_valid}")
+        except Exception as e:
+            current_app.logger.error(f"  - Error checking token validity: {str(e)}", exc_info=True)
+            token_valid = False
+
+        if not token_valid:
+            current_app.logger.warning("PRE-FLIGHT CHECK #2: FAILED - Kite token expired or invalid")
+            flash('Your Kite access token has expired. Please reconnect to Kite.', 'warning')
+            current_app.logger.info("Redirecting to: settings.index?tab=kite")
+            return redirect(url_for('settings.index', tab='kite'))
+
+        current_app.logger.info("PRE-FLIGHT CHECK #2: PASSED - Kite token is valid")
+
+        # PRE-FLIGHT VALIDATION #3: Check if there's already an active task
+        current_app.logger.info("PRE-FLIGHT CHECK #3: Checking for active download tasks...")
+        current_app.logger.info(f"  - Querying active tasks for user_id: {current_user.id}")
+
+        try:
+            active_task = get_active_task(current_user.id)
+            if active_task:
+                current_app.logger.warning(f"PRE-FLIGHT CHECK #3: FAILED - Active task found: Task ID={active_task.id}, Status={active_task.status}")
+                current_app.logger.info(f"  - Task details: created_at={active_task.created_at}, started_at={active_task.started_at}")
+                current_app.logger.info(f"  - Task progress: {active_task.completed_stocks}/{active_task.total_stocks} completed, {active_task.failed_stocks} failed, {active_task.skipped_stocks} skipped")
+                current_app.logger.info(f"  - Progress percentage: {active_task.progress_percentage}%")
+                flash(f'You already have an active download task (Status: {active_task.status}). Use Force Reset if stuck.', 'warning')
+                current_app.logger.info("Redirecting to: settings.index?tab=historical")
+                return redirect(url_for('settings.index', tab='historical'))
+            else:
+                current_app.logger.info("PRE-FLIGHT CHECK #3: PASSED - No active tasks found")
+        except Exception as e:
+            current_app.logger.error(f"PRE-FLIGHT CHECK #3: ERROR - Exception while checking active tasks: {str(e)}", exc_info=True)
+            flash(f'Error checking active tasks: {str(e)}', 'danger')
+            return redirect(url_for('settings.index', tab='historical'))
+
+        # PRE-FLIGHT VALIDATION #4: Verify Kite client can be initialized
+        current_app.logger.info("PRE-FLIGHT CHECK #4: Initializing Kite client...")
+        try:
+            kite_client = get_kite_client(access_token=current_user.kite_access_token)
+            current_app.logger.info(f"PRE-FLIGHT CHECK #4: PASSED - Kite client initialized successfully for user {current_user.username}")
+            current_app.logger.info(f"  - Kite client type: {type(kite_client)}")
+        except Exception as e:
+            current_app.logger.error(f"PRE-FLIGHT CHECK #4: FAILED - Kite client initialization error: {str(e)}", exc_info=True)
+            flash(f'Failed to initialize Kite client: {str(e)}. Please reconnect to Kite.', 'danger')
+            current_app.logger.info("Redirecting to: settings.index?tab=kite")
+            return redirect(url_for('settings.index', tab='kite'))
+
+        # PRE-FLIGHT VALIDATION #5: Check that NIFTY 500 stocks exist
+        current_app.logger.info("PRE-FLIGHT CHECK #5: Checking NIFTY 500 stocks in database...")
+        try:
+            from app.models import Instrument
+            nifty500_count = Instrument.query.filter_by(is_nifty500=True).count()
+            current_app.logger.info(f"  - NIFTY 500 stock count: {nifty500_count}")
+
+            if nifty500_count == 0:
+                current_app.logger.warning("PRE-FLIGHT CHECK #5: FAILED - No NIFTY 500 stocks found in database")
+                flash('No NIFTY 500 stocks found in database. Please sync instruments first.', 'warning')
+                current_app.logger.info("Redirecting to: settings.index?tab=historical")
+                return redirect(url_for('settings.index', tab='historical'))
+
+            current_app.logger.info(f"PRE-FLIGHT CHECK #5: PASSED - Found {nifty500_count} NIFTY 500 stocks")
+        except Exception as e:
+            current_app.logger.error(f"PRE-FLIGHT CHECK #5: ERROR - Exception while counting stocks: {str(e)}", exc_info=True)
+            flash(f'Error checking stock database: {str(e)}', 'danger')
             return redirect(url_for('settings.index', tab='historical'))
 
         # Create new task
-        task = create_download_task(current_user.id)
-        if not task:
-            flash('Please configure historical data settings first.', 'warning')
+        current_app.logger.info("=" * 80)
+        current_app.logger.info("ALL PRE-FLIGHT CHECKS PASSED - Creating download task...")
+        current_app.logger.info("=" * 80)
+
+        try:
+            current_app.logger.info(f"Calling create_download_task(user_id={current_user.id})...")
+            task = create_download_task(current_user.id)
+
+            if not task:
+                current_app.logger.error("TASK CREATION FAILED - create_download_task returned None")
+                current_app.logger.info("Possible reason: No historical data settings configured")
+                flash('Please configure historical data settings first.', 'warning')
+                current_app.logger.info("Redirecting to: settings.index?tab=historical")
+                return redirect(url_for('settings.index', tab='historical'))
+
+            current_app.logger.info(f"TASK CREATION SUCCESS - Created download task ID={task.id}")
+            current_app.logger.info(f"  - Task details: status={task.status}, user_id={task.user_id}")
+            current_app.logger.info(f"  - Task created_at: {task.created_at}")
+
+        except Exception as e:
+            current_app.logger.error(f"TASK CREATION ERROR - Exception during create_download_task: {str(e)}", exc_info=True)
+            flash(f'Error creating download task: {str(e)}', 'danger')
             return redirect(url_for('settings.index', tab='historical'))
 
         # Start download in background
-        downloader = HistoricalDataDownloader(task.id)
-        downloader.start_download()
+        current_app.logger.info("=" * 80)
+        current_app.logger.info(f"STARTING DOWNLOAD - Initializing HistoricalDataDownloader for task {task.id}...")
+        current_app.logger.info("=" * 80)
 
-        flash('Historical data download started in background!', 'success')
-        current_app.logger.info(f'User {current_user.username} started download task {task.id}')
+        try:
+            current_app.logger.info(f"Creating HistoricalDataDownloader(task_id={task.id})...")
+            downloader = HistoricalDataDownloader(task.id)
+            current_app.logger.info(f"  - Downloader instance created: {type(downloader)}")
+
+            current_app.logger.info(f"Calling downloader.start_download()...")
+            downloader.start_download()
+            current_app.logger.info("  - start_download() call completed")
+
+            # Check if task status was updated
+            db.session.expire(task)
+            updated_task = DownloadTask.query.get(task.id)
+            current_app.logger.info(f"  - Task status after start_download: {updated_task.status}")
+            current_app.logger.info(f"  - Task total_stocks: {updated_task.total_stocks}")
+            current_app.logger.info(f"  - Task completed_stocks: {updated_task.completed_stocks}")
+            current_app.logger.info(f"  - Task progress: {updated_task.progress_percentage}%")
+
+        except Exception as e:
+            current_app.logger.error(f"DOWNLOAD START ERROR - Exception during downloader initialization or start: {str(e)}", exc_info=True)
+            flash(f'Error starting download: {str(e)}', 'danger')
+            return redirect(url_for('settings.index', tab='historical'))
+
+        flash('Historical data download started in background! Check the progress below.', 'success')
+        current_app.logger.info("=" * 80)
+        current_app.logger.info(f"DOWNLOAD STARTED SUCCESSFULLY - Task {task.id} is now running")
+        current_app.logger.info(f"User {current_user.username} successfully started download task {task.id}")
+        current_app.logger.info("Redirecting to: settings.index?tab=historical")
+        current_app.logger.info("=" * 80)
 
     except Exception as e:
+        current_app.logger.error("=" * 80)
+        current_app.logger.error("UNEXPECTED ERROR IN START_DOWNLOAD ENDPOINT")
+        current_app.logger.error(f"Error type: {type(e).__name__}")
+        current_app.logger.error(f"Error message: {str(e)}")
+        current_app.logger.error("Full traceback:", exc_info=True)
+        current_app.logger.error("=" * 80)
         flash(f'Error starting download: {str(e)}', 'danger')
-        current_app.logger.error(f'Error starting download: {str(e)}')
 
     return redirect(url_for('settings.index', tab='historical'))
 
@@ -623,6 +772,49 @@ def cancel_download(task_id):
     except Exception as e:
         flash(f'Error cancelling download: {str(e)}', 'danger')
         current_app.logger.error(f'Error cancelling download: {str(e)}')
+
+    return redirect(url_for('settings.index', tab='historical'))
+
+
+@settings_bp.route('/historical-data/force-reset', methods=['POST'])
+@login_required
+def force_reset_downloads():
+    """Force reset all download tasks for current user - cancels all pending/running/paused tasks AND clears historical data"""
+    try:
+        from app.download_service import active_downloads
+
+        # Get all non-completed tasks for this user
+        pending_tasks = DownloadTask.query.filter_by(user_id=current_user.id).filter(
+            DownloadTask.status.in_(['pending', 'running', 'paused'])
+        ).all()
+
+        reset_count = 0
+        for task in pending_tasks:
+            # Cancel active downloads
+            if task.id in active_downloads:
+                try:
+                    downloader = active_downloads[task.id]
+                    downloader.cancel_download()
+                except Exception as e:
+                    current_app.logger.warning(f'Error cancelling active download {task.id}: {e}')
+
+            # Force status to cancelled
+            task.status = 'cancelled'
+            task.completed_at = datetime.utcnow()
+            reset_count += 1
+
+        # Clear all historical data
+        deleted_count = HistoricalData.query.delete()
+
+        db.session.commit()
+
+        flash(f'Successfully reset {reset_count} download task(s) and cleared {deleted_count} historical data records. You can now start a fresh download.', 'success')
+        current_app.logger.info(f'User {current_user.username} force reset {reset_count} download tasks and cleared {deleted_count} historical data records')
+
+    except Exception as e:
+        flash(f'Error resetting downloads: {str(e)}', 'danger')
+        current_app.logger.error(f'Error force resetting downloads: {str(e)}')
+        db.session.rollback()
 
     return redirect(url_for('settings.index', tab='historical'))
 
@@ -724,6 +916,154 @@ def stock_coverage():
 
     except Exception as e:
         current_app.logger.error(f'Error getting stock coverage: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ============================================================================
+# MARKET CAP DATA ROUTES
+# ============================================================================
+
+@settings_bp.route('/marketcap/start', methods=['POST'])
+@login_required
+def start_marketcap_fetch():
+    """Start fetching market cap data from NSE for all stocks"""
+    try:
+        success, message, task_id = marketcap_service.start_marketcap_fetch(
+            current_user.id,
+            current_app._get_current_object()
+        )
+
+        if success:
+            return jsonify({
+                'success': True,
+                'message': message,
+                'task_id': task_id
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': message
+            }), 400
+
+    except Exception as e:
+        current_app.logger.error(f'Error starting market cap fetch: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/marketcap/status', methods=['GET'])
+@login_required
+def marketcap_fetch_status():
+    """Get status of current market cap fetch task"""
+    try:
+        status = marketcap_service.get_marketcap_fetch_status(current_user.id)
+        statistics = marketcap_service.get_marketcap_statistics()
+
+        return jsonify({
+            'success': True,
+            'task': status,
+            'statistics': statistics
+        })
+
+    except Exception as e:
+        current_app.logger.error(f'Error getting market cap fetch status: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/marketcap/cancel/<int:task_id>', methods=['POST'])
+@login_required
+def cancel_marketcap_fetch(task_id):
+    """Cancel a running market cap fetch task"""
+    try:
+        # Verify task belongs to current user
+        task = MarketCapFetchTask.query.get(task_id)
+        if not task:
+            return jsonify({
+                'success': False,
+                'error': 'Task not found'
+            }), 404
+
+        if task.user_id != current_user.id:
+            return jsonify({
+                'success': False,
+                'error': 'Unauthorized'
+            }), 403
+
+        success, message = marketcap_service.cancel_marketcap_fetch(task_id)
+
+        if success:
+            return jsonify({
+                'success': True,
+                'message': message
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': message
+            }), 400
+
+    except Exception as e:
+        current_app.logger.error(f'Error cancelling market cap fetch: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/marketcap/data', methods=['GET'])
+@login_required
+def get_marketcap_data():
+    """Get paginated market cap data"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        search = request.args.get('search', '', type=str)
+
+        # Build query
+        query = StockInformation.query
+
+        # Apply search filter
+        if search:
+            query = query.filter(
+                db.or_(
+                    StockInformation.tradingsymbol.like(f'%{search}%'),
+                    StockInformation.company_name.like(f'%{search}%')
+                )
+            )
+
+        # Paginate
+        pagination = query.order_by(
+            StockInformation.total_market_cap.desc().nullslast()
+        ).paginate(page=page, per_page=per_page, error_out=False)
+
+        # Convert to dict
+        stocks_data = []
+        for stock in pagination.items:
+            stocks_data.append(stock.to_dict())
+
+        return jsonify({
+            'success': True,
+            'stocks': stocks_data,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': pagination.total,
+                'pages': pagination.pages,
+                'has_prev': pagination.has_prev,
+                'has_next': pagination.has_next
+            }
+        })
+
+    except Exception as e:
+        current_app.logger.error(f'Error getting market cap data: {str(e)}')
         return jsonify({
             'success': False,
             'error': str(e)

@@ -13,7 +13,13 @@ Run with: python migrate_sectors.py
 """
 
 import sys
+import os
 from datetime import datetime
+
+# Add the project root directory to the path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+
 from app import create_app, db
 from app.models import Instrument, Sector, SubSector
 from app.sector_service import SectorService

@@ -13,6 +13,16 @@ class Config:
         'sqlite:///' + os.path.join(basedir, 'instance', 'app.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # SQLite-specific engine options to prevent database locks
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,  # Verify connections before using them
+        'pool_recycle': 3600,   # Recycle connections after 1 hour
+        'connect_args': {
+            'timeout': 30,       # Wait up to 30 seconds for database lock
+            'check_same_thread': False  # Allow SQLite to be used across threads
+        }
+    }
+
     # Session configuration
     SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS
     SESSION_COOKIE_HTTPONLY = True
@@ -20,6 +30,11 @@ class Config:
 
     # Remember me cookie duration (in days)
     REMEMBER_COOKIE_DURATION = 30
+
+    # Logging configuration
+    LOG_DIR = os.path.join(basedir, 'logs')
+    LOG_MAX_BYTES = 10 * 1024 * 1024  # 10MB
+    LOG_BACKUP_COUNT = 10
 
 
 class DevelopmentConfig(Config):

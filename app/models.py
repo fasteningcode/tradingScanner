@@ -710,6 +710,115 @@ class DownloadLog(db.Model):
         }
 
 
+class StockInformation(db.Model):
+    """Model for storing stock fundamental information from NSE"""
+
+    __tablename__ = 'stock_information'
+
+    id = db.Column(db.Integer, primary_key=True)
+    tradingsymbol = db.Column(db.String(50), unique=True, nullable=False, index=True)
+
+    # Market Cap data
+    total_market_cap = db.Column(db.Float, nullable=True)  # Total Market Cap in crores
+    free_float_market_cap = db.Column(db.Float, nullable=True)  # Free Float Market Cap in crores
+
+    # Stock price and shares data
+    last_traded_price = db.Column(db.Float, nullable=True)  # Last traded price (LTP)
+    outstanding_shares = db.Column(db.BigInteger, nullable=True)  # Total outstanding shares
+    float_shares = db.Column(db.BigInteger, nullable=True)  # Float shares (publicly tradable shares)
+
+    # Additional metadata
+    company_name = db.Column(db.String(200), nullable=True)
+    last_updated = db.Column(db.DateTime, nullable=True)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<StockInformation {self.tradingsymbol} TotalMC:{self.total_market_cap}>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'tradingsymbol': self.tradingsymbol,
+            'company_name': self.company_name,
+            'total_market_cap': self.total_market_cap,
+            'free_float_market_cap': self.free_float_market_cap,
+            'last_traded_price': self.last_traded_price,
+            'outstanding_shares': self.outstanding_shares,
+            'float_shares': self.float_shares,
+            'last_updated': self.last_updated.isoformat() if self.last_updated else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+class MarketCapFetchTask(db.Model):
+    """Model for tracking market cap data fetch tasks"""
+
+    __tablename__ = 'marketcap_fetch_tasks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+
+    # Progress tracking
+    status = db.Column(db.String(20), default='pending', nullable=False, index=True)  # 'pending', 'running', 'completed', 'failed', 'cancelled'
+    progress_percentage = db.Column(db.Float, default=0.0)
+    total_stocks = db.Column(db.Integer, default=0)
+    completed_stocks = db.Column(db.Integer, default=0)
+    failed_stocks = db.Column(db.Integer, default=0)
+    current_stock_symbol = db.Column(db.String(50), nullable=True)
+
+    # Statistics
+    total_api_calls = db.Column(db.Integer, default=0)
+    total_success = db.Column(db.Integer, default=0)
+
+    # Failed stocks tracking (JSON array of symbols)
+    failed_stocks_list = db.Column(db.Text, nullable=True)  # JSON array of failed symbols
+
+    # Timestamps
+    started_at = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Error handling
+    error_message = db.Column(db.Text, nullable=True)
+
+    # Relationships
+    user = db.relationship('User', backref=db.backref('marketcap_fetch_tasks', lazy='dynamic', cascade='all, delete-orphan'))
+
+    def __repr__(self):
+        return f'<MarketCapFetchTask {self.id} User:{self.user_id} Status:{self.status} Progress:{self.progress_percentage}%>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        import json
+        failed_list = []
+        if self.failed_stocks_list:
+            try:
+                failed_list = json.loads(self.failed_stocks_list)
+            except:
+                failed_list = []
+
+        return {
+            'id': self.id,
+            'status': self.status,
+            'progress_percentage': round(self.progress_percentage, 2),
+            'total_stocks': self.total_stocks,
+            'completed_stocks': self.completed_stocks,
+            'failed_stocks': self.failed_stocks,
+            'current_stock_symbol': self.current_stock_symbol,
+            'total_api_calls': self.total_api_calls,
+            'total_success': self.total_success,
+            'failed_stocks_list': failed_list,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'error_message': self.error_message
+        }
+
+
 @login_manager.user_loader
 def load_user(user_id):
     """Load user by ID for Flask-Login"""

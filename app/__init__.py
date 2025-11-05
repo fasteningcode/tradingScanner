@@ -4,6 +4,9 @@ from flask_login import LoginManager
 from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
 from config import config
+import logging
+from logging.handlers import RotatingFileHandler
+import os
 
 # Initialize extensions
 db = SQLAlchemy()
@@ -26,6 +29,9 @@ def create_app(config_name='default'):
 
     # Load configuration
     app.config.from_object(config[config_name])
+
+    # Setup logging
+    setup_logging(app)
 
     # Initialize extensions with app
     db.init_app(app)
@@ -69,6 +75,17 @@ def create_app(config_name='default'):
     with app.app_context():
         db.create_all()
 
+        # Enable WAL mode for SQLite to prevent database locks
+        # WAL (Write-Ahead Logging) allows concurrent reads and writes
+        if 'sqlite' in app.config['SQLALCHEMY_DATABASE_URI']:
+            from sqlalchemy import text
+            with db.engine.connect() as conn:
+                conn.execute(text("PRAGMA journal_mode=WAL"))
+                conn.execute(text("PRAGMA synchronous=NORMAL"))
+                conn.execute(text("PRAGMA busy_timeout=30000"))  # 30 seconds
+                conn.commit()
+                app.logger.info("SQLite WAL mode enabled for concurrent access")
+
     # Add cache control headers to prevent stale data
     @app.after_request
     def add_header(response):
@@ -93,3 +110,52 @@ def create_app(config_name='default'):
         return render_template('500.html'), 500
 
     return app
+
+
+def setup_logging(app):
+    """Configure application logging to file and console"""
+    # Create logs directory if it doesn't exist
+    if not os.path.exists('logs'):
+        os.mkdir('logs')
+
+    # File handler for general logs
+    file_handler = RotatingFileHandler(
+        'logs/app.log',
+        maxBytes=10240000,  # 10MB
+        backupCount=10
+    )
+    file_handler.setFormatter(logging.Formatter(
+        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+    ))
+    file_handler.setLevel(logging.INFO)
+    app.logger.addHandler(file_handler)
+
+    # File handler for errors only
+    error_handler = RotatingFileHandler(
+        'logs/error.log',
+        maxBytes=10240000,  # 10MB
+        backupCount=10
+    )
+    error_handler.setFormatter(logging.Formatter(
+        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+    ))
+    error_handler.setLevel(logging.ERROR)
+    app.logger.addHandler(error_handler)
+
+    # File handler for access logs
+    access_handler = RotatingFileHandler(
+        'logs/access.log',
+        maxBytes=10240000,  # 10MB
+        backupCount=10
+    )
+    access_handler.setFormatter(logging.Formatter(
+        '%(asctime)s %(message)s'
+    ))
+    access_handler.setLevel(logging.INFO)
+
+    # Add access log handler to werkzeug
+    logging.getLogger('werkzeug').addHandler(access_handler)
+    logging.getLogger('werkzeug').setLevel(logging.INFO)
+
+    app.logger.setLevel(logging.INFO)
+    app.logger.info('Flask application startup')

@@ -3,6 +3,13 @@ Command-line script to sync instruments from Kite
 Run this if you prefer CLI over the web UI button
 """
 
+import sys
+import os
+
+# Add the project root directory to the path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+
 from app import create_app, db
 from app.instruments_manager import InstrumentsManager
 

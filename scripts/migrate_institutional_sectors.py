@@ -5,6 +5,12 @@ This script clears existing sectors and imports the institutional classification
 """
 
 import sys
+import os
+
+# Add the project root directory to the path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+
 from app import create_app, db
 from app.models import Sector, SubSector, Instrument
 

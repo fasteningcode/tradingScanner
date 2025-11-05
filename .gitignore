@@ -50,3 +50,11 @@ Thumbs.db
 
 # Logs
 *.log
+logs/
+
+# Documentation archives
+docs/archive/*.md
+
+# Test outputs
+tests/__pycache__/
+tests/*.pyc

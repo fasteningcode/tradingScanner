@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Confirm Clear Historical Data - Settings{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        Confirm Clear Historical Data
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Warning:</strong> This action cannot be undone!
+                    </div>
+
+                    <p class="lead">You are about to delete <strong class="text-danger">{{ data_count }} historical data records</strong> from the database.</p>
+
+                    <p>This includes:</p>
+                    <ul>
+                        <li>All historical candle data for all stocks</li>
+                        <li>All historical price information</li>
+                        <li>All downloaded market data</li>
+                    </ul>
+
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Note:</strong> The instrument list and download tasks will NOT be deleted. You can re-download historical data after clearing.
+                    </div>
+
+                    <p class="mb-4"><strong>Are you sure you want to proceed?</strong></p>
+
+                    <div class="d-flex gap-3">
+                        <form method="POST" action="{{ url_for('settings.clear_historical_data') }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-danger btn-lg" onclick="return confirm('Are you absolutely sure? This will delete {{ data_count }} records!');">
+                                <i class="bi bi-trash me-2"></i>Yes, Clear All Data ({{ data_count }} records)
+                            </button>
+                        </form>
+
+                        <a href="{{ url_for('settings.index', tab='historical') }}" class="btn btn-secondary btn-lg">
+                            <i class="bi bi-x-circle me-2"></i>Cancel
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-3">
+                <a href="{{ url_for('settings.index') }}" class="text-decoration-none">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Settings
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
