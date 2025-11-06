@@ -9,6 +9,7 @@ from app import db
 from app.models import Sector, SubSector, Instrument
 from app.sector_service import SectorService
 from app.subsector_service import SubSectorService
+from app.historical_index_service import HistoricalIndexService
 
 sector_management_bp = Blueprint('sector_management', __name__, url_prefix='/sector-management')
 
@@ -173,18 +174,34 @@ def view_sector(sector_id):
         flash('Sector not found', 'danger')
         return redirect(url_for('sector_management.index'))
 
-    # Get statistics for each sub-sector
+    # Get sector index from historical data
+    sector_index = None
+    if sector.index_symbol:
+        sector_index = HistoricalIndexService.get_index_with_change(sector.index_symbol)
+
+    # Get statistics for each sub-sector with historical index data
     subsector_data = []
     for subsector in sub_sectors:
         stock_count = subsector.instruments.filter_by(is_nifty500=True).count()
+
+        # Get subsector index from historical data
+        index_data = None
+        if subsector.index_symbol:
+            index_data = HistoricalIndexService.get_index_with_change(subsector.index_symbol)
+
         subsector_data.append({
             'subsector': subsector,
-            'stock_count': stock_count
+            'stock_count': stock_count,
+            'index_value': index_data.get('index_value') if index_data else None,
+            'percentage_change': index_data.get('percentage_change') if index_data else None,
+            'change_direction': index_data.get('change_direction') if index_data else 'neutral',
+            'index_date': index_data.get('date') if index_data else None
         })
 
     return render_template('sector_management/view_sector.html',
                          title=f'{sector.name} - Sector Details',
                          sector=sector,
+                         sector_index=sector_index,
                          subsector_data=subsector_data)
 
 
@@ -309,6 +326,11 @@ def view_subsector_stocks(subsector_id):
         flash('Sub-sector not found', 'danger')
         return redirect(url_for('sector_management.index'))
 
+    # Get subsector index from historical data
+    subsector_index = None
+    if subsector.index_symbol:
+        subsector_index = HistoricalIndexService.get_index_with_change(subsector.index_symbol)
+
     # Get pagination parameters
     page = request.args.get('page', 1, type=int)
     search = request.args.get('search', '', type=str)
@@ -324,6 +346,7 @@ def view_subsector_stocks(subsector_id):
     return render_template('sector_management/subsector_stocks.html',
                          title=f'{subsector.name} - Stocks',
                          subsector=subsector,
+                         subsector_index=subsector_index,
                          pagination=pagination,
                          search=search)
 

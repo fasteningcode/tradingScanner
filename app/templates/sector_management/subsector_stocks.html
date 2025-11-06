@@ -30,6 +30,62 @@
     </div>
 </div>
 
+{% if subsector_index %}
+<!-- Subsector Index Summary -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card card-modern shadow-sm border-primary">
+            <div class="card-body">
+                <h5 class="card-title mb-3">
+                    <i class="bi bi-graph-up-arrow me-2"></i>{{ subsector.name }} Index
+                </h5>
+                <div class="row">
+                    <div class="col-md-6 text-center border-end">
+                        <h6 class="text-muted mb-2">Current Index Value</h6>
+                        <h1 class="mb-1 text-primary fw-bold">{{ "%.2f"|format(subsector_index.index_value) }}</h1>
+                        {% if subsector_index.percentage_change is not none %}
+                            {% if subsector_index.change_direction == 'up' %}
+                                <span class="badge bg-success fs-6">
+                                    <i class="bi bi-arrow-up"></i> +{{ "%.2f"|format(subsector_index.percentage_change) }}%
+                                </span>
+                            {% elif subsector_index.change_direction == 'down' %}
+                                <span class="badge bg-danger fs-6">
+                                    <i class="bi bi-arrow-down"></i> {{ "%.2f"|format(subsector_index.percentage_change) }}%
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary fs-6">0.00%</span>
+                            {% endif %}
+                        {% endif %}
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                {% if subsector_index.date %}
+                                    Last Updated: {{ subsector_index.date.strftime('%d %b %Y') }}
+                                {% endif %}
+                            </small>
+                        </div>
+                    </div>
+                    <div class="col-md-6 text-center">
+                        <h6 class="text-muted mb-2">Subsector Details</h6>
+                        <p class="mb-1">
+                            {% if subsector.sector.icon %}
+                            <i class="bi {{ subsector.sector.icon }}" {% if subsector.sector.color %}style="color: {{ subsector.sector.color }}"{% endif %}></i>
+                            {% endif %}
+                            {{ subsector.sector.name }}
+                        </p>
+                        <small class="text-muted">Free-Float Market Cap Weighted</small>
+                        {% if subsector.index_symbol %}
+                            <div class="mt-2">
+                                <span class="badge bg-info">{{ subsector.index_symbol }}</span>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Statistics Cards -->
 <div class="row mb-4">
     <div class="col-md-4">

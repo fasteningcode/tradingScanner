@@ -21,6 +21,60 @@
     </div>
 </div>
 
+{% if market_index %}
+<!-- Market Index Summary -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card card-modern shadow-sm border-primary">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-6 text-center border-end">
+                        <h5 class="text-muted mb-2">
+                            <i class="bi bi-graph-up me-2"></i>NIFTY 500 Custom Index
+                        </h5>
+                        <h1 class="mb-1 text-primary fw-bold">{{ "%.2f"|format(market_index.index_value) }}</h1>
+                        {% if market_index.percentage_change is not none %}
+                            {% if market_index.change_direction == 'up' %}
+                                <span class="badge bg-success fs-6">
+                                    <i class="bi bi-arrow-up"></i> +{{ "%.2f"|format(market_index.percentage_change) }}%
+                                </span>
+                            {% elif market_index.change_direction == 'down' %}
+                                <span class="badge bg-danger fs-6">
+                                    <i class="bi bi-arrow-down"></i> {{ "%.2f"|format(market_index.percentage_change) }}%
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary fs-6">0.00%</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="badge bg-secondary fs-6">N/A</span>
+                        {% endif %}
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                {% if market_index.date %}
+                                    Last Updated: {{ market_index.date.strftime('%d %b %Y') }}
+                                {% else %}
+                                    No data available
+                                {% endif %}
+                            </small>
+                        </div>
+                    </div>
+                    <div class="col-md-6 text-center">
+                        <h6 class="text-muted mb-2">Index Type</h6>
+                        <p class="mb-1">Free-Float Market Cap Weighted</p>
+                        <small class="text-muted">Base: 1000 (Jul 1, 2025)</small>
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                Calculated from historical data
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% if total_sectors == 0 %}
 <!-- Empty State -->
 <div class="row justify-content-center">
@@ -74,7 +128,34 @@
                     </div>
                 </div>
 
-                <div class="row text-center mt-4">
+                {% if data.index_value %}
+                <!-- Sector Index Display -->
+                <div class="alert alert-light border mb-3 py-3">
+                    <div class="text-center">
+                        <h4 class="mb-1 text-primary fw-bold">{{ "%.2f"|format(data.index_value) }}</h4>
+                        {% if data.percentage_change is not none %}
+                            {% if data.change_direction == 'up' %}
+                                <span class="badge bg-success">
+                                    <i class="bi bi-arrow-up"></i> +{{ "%.2f"|format(data.percentage_change) }}%
+                                </span>
+                            {% elif data.change_direction == 'down' %}
+                                <span class="badge bg-danger">
+                                    <i class="bi bi-arrow-down"></i> {{ "%.2f"|format(data.percentage_change) }}%
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary">0.00%</span>
+                            {% endif %}
+                        {% endif %}
+                        {% if data.index_date %}
+                            <div class="mt-2">
+                                <small class="text-muted">{{ data.index_date.strftime('%d %b %Y') }}</small>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="row text-center mt-3">
                     <div class="col-6">
                         <div class="border-end">
                             <h4 class="mb-0 text-primary">{{ data.subsector_count }}</h4>

@@ -66,6 +66,16 @@
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
+                        <button class="nav-link {{ 'active' if active_tab == 'indices' else '' }}"
+                                id="indices-tab"
+                                data-bs-toggle="tab"
+                                data-bs-target="#indices"
+                                type="button"
+                                role="tab">
+                            <i class="bi bi-graph-up-arrow me-2"></i>Index Management
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
                         <button class="nav-link {{ 'active' if active_tab == 'about' else '' }}"
                                 id="about-tab"
                                 data-bs-toggle="tab"
@@ -791,6 +801,174 @@
                         </div>
                     </div>
 
+                    <!-- Index Management Tab -->
+                    <div class="tab-pane fade {{ 'show active' if active_tab == 'indices' else '' }}"
+                         id="indices"
+                         role="tabpanel">
+                        <h4 class="mb-3">Index Management</h4>
+
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            Manage historical indices for sectors and subsectors. Indices are calculated using free-float market capitalization with July 1, 2025 as the base date (1000).
+                        </div>
+
+                        <!-- Index Symbols Overview -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="bi bi-tags me-2"></i>Index Symbols
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <p class="text-muted mb-3">
+                                    Each sector and subsector must have an index symbol (max 10 characters) to generate historical indices.
+                                </p>
+                                <div class="alert alert-info">
+                                    <i class="bi bi-lightbulb me-2"></i>
+                                    <strong>Quick Start:</strong> Use "Auto-Generate Symbols" to automatically create index symbols for all sectors and subsectors that don't have one yet.
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <form action="{{ url_for('settings.generate_index_symbols') }}" method="POST" style="display: inline;">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-success">
+                                            <i class="bi bi-magic me-2"></i>Auto-Generate Symbols
+                                        </button>
+                                    </form>
+                                    <a href="{{ url_for('sector_management.index') }}" class="btn btn-outline-primary">
+                                        <i class="bi bi-gear me-2"></i>Manually Manage Symbols
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Index Statistics -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="bi bi-bar-chart me-2"></i>Index Statistics
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4 mb-3">
+                                        <div class="p-3 bg-light rounded">
+                                            <h6 class="mb-2">Total Indices</h6>
+                                            <p class="mb-0">
+                                                <strong class="text-primary" id="totalIndicesCount">Loading...</strong>
+                                            </p>
+                                            <small class="text-muted">Market + Sectors + Subsectors</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <div class="p-3 bg-light rounded">
+                                            <h6 class="mb-2">Data Points</h6>
+                                            <p class="mb-0">
+                                                <strong class="text-primary" id="indexDataPoints">0</strong>
+                                            </p>
+                                            <small class="text-muted">Total index values stored</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <div class="p-3 bg-light rounded">
+                                            <h6 class="mb-2">Date Range</h6>
+                                            <p class="mb-0">
+                                                <strong class="text-primary" id="indexDateRange">N/A</strong>
+                                            </p>
+                                            <small class="text-muted">Data availability</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Generate Indices -->
+                        <div class="card mb-4">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="card-title mb-0">
+                                    <i class="bi bi-play-circle me-2"></i>Generate Historical Indices
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <p class="card-text">
+                                    Calculate historical index values for all sectors and subsectors using historical candlestick data.
+                                    The calculation uses free-float market capitalization with July 1, 2025 as the base date (1000).
+                                </p>
+
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle me-2"></i>
+                                    <strong>Important:</strong>
+                                    <ul class="mb-0 mt-2">
+                                        <li>Ensure historical candlestick data is downloaded for all stocks</li>
+                                        <li>Ensure market cap data (float_shares) is available for all stocks</li>
+                                        <li>Ensure all sectors and subsectors have index symbols defined</li>
+                                        <li>Index calculation may take several minutes depending on date range</li>
+                                    </ul>
+                                </div>
+
+                                <!-- Date Range Selection -->
+                                <form id="generateIndicesForm">
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <label for="indexStartDate" class="form-label">Start Date</label>
+                                            <input type="date" id="indexStartDate" class="form-control" required>
+                                            <small class="text-muted">Base date is July 1, 2025</small>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="indexEndDate" class="form-label">End Date</label>
+                                            <input type="date" id="indexEndDate" class="form-control" required>
+                                            <small class="text-muted">Usually today's date</small>
+                                        </div>
+                                    </div>
+
+                                    <button type="submit" id="generateIndicesBtn" class="btn btn-success">
+                                        <i class="bi bi-play-circle me-2"></i>Generate Indices
+                                    </button>
+                                </form>
+
+                                <!-- Progress Section (hidden by default) -->
+                                <div id="indexGenerationProgress" class="mt-4" style="display: none;">
+                                    <hr>
+                                    <h6>Generation Progress</h6>
+                                    <div class="progress mb-2" style="height: 25px;">
+                                        <div id="indexProgressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+                                             role="progressbar"
+                                             style="width: 0%"
+                                             aria-valuenow="0"
+                                             aria-valuemin="0"
+                                             aria-valuemax="100">
+                                            <span id="indexProgressPercent">0%</span>
+                                        </div>
+                                    </div>
+                                    <div class="small text-muted">
+                                        <div><strong>Status:</strong> <span id="indexGenerationStatus">-</span></div>
+                                        <div><strong>Current:</strong> <span id="indexCurrentSymbol">-</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Clear Index Data -->
+                        <div class="card">
+                            <div class="card-header bg-danger text-white">
+                                <h5 class="card-title mb-0">
+                                    <i class="bi bi-trash me-2"></i>Clear Index Data
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <p class="card-text">
+                                    Remove all calculated index history data from the database. This will not delete index symbols or sector/subsector definitions.
+                                </p>
+                                <div class="alert alert-danger">
+                                    <i class="bi bi-exclamation-octagon me-2"></i>
+                                    <strong>Warning:</strong> This action cannot be undone. All historical index values will be permanently deleted.
+                                </div>
+                                <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#clearIndicesModal">
+                                    <i class="bi bi-trash me-2"></i>Clear All Index Data
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- About Tab -->
                     <div class="tab-pane fade {{ 'show active' if active_tab == 'about' else '' }}"
                          id="about"
@@ -853,6 +1031,50 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Clear Indices Confirmation Modal -->
+<div class="modal fade" id="clearIndicesModal" tabindex="-1" aria-labelledby="clearIndicesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="clearIndicesModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>Clear All Index Data
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Warning:</strong> This action cannot be undone!
+                </div>
+                <p>You are about to delete <strong>all historical index data</strong> from the database. This includes:</p>
+                <ul>
+                    <li>All calculated index values for market, sectors, and subsectors</li>
+                    <li>All daily index records</li>
+                    <li>Historical index performance data</li>
+                </ul>
+                <p><strong>This will NOT delete:</strong></p>
+                <ul>
+                    <li>Index symbols assigned to sectors/subsectors</li>
+                    <li>Sector and subsector definitions</li>
+                    <li>Historical candlestick data</li>
+                </ul>
+                <p class="mb-0">Are you sure you want to proceed?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-2"></i>Cancel
+                </button>
+                <form action="{{ url_for('settings.clear_index_data') }}" method="POST" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash me-2"></i>Yes, Clear All Index Data
+                    </button>
+                </form>
             </div>
         </div>
     </div>
@@ -1589,6 +1811,214 @@
                 clearInterval(marketCapPollInterval);
             }
         });
+
+        // ===== Index Management Functionality =====
+
+        // Load index statistics on page load
+        function loadIndexStats() {
+            fetch('{{ url_for("settings.index_stats") }}')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('totalIndicesCount').textContent = data.total_indices;
+                        document.getElementById('indexDataPoints').textContent = data.data_points.toLocaleString();
+
+                        if (data.earliest_date && data.latest_date) {
+                            document.getElementById('indexDateRange').textContent =
+                                `${data.earliest_date} to ${data.latest_date}`;
+                        } else {
+                            document.getElementById('indexDateRange').textContent = 'No data';
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading index stats:', error);
+                });
+        }
+
+        // Load stats if we're on the indices tab
+        const indicesTab = document.getElementById('indices-tab');
+        if (indicesTab) {
+            loadIndexStats();
+
+            // Reload stats when tab is shown
+            indicesTab.addEventListener('shown.bs.tab', function() {
+                loadIndexStats();
+            });
+        }
+
+        // Handle index generation form
+        const generateIndicesForm = document.getElementById('generateIndicesForm');
+        const generateIndicesBtn = document.getElementById('generateIndicesBtn');
+        const indexProgressDiv = document.getElementById('indexGenerationProgress');
+        const indexProgressBar = document.getElementById('indexProgressBar');
+        const indexProgressPercent = document.getElementById('indexProgressPercent');
+
+        if (generateIndicesForm) {
+            generateIndicesForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                const startDate = document.getElementById('indexStartDate').value;
+                const endDate = document.getElementById('indexEndDate').value;
+
+                // Validate dates
+                if (!startDate || !endDate) {
+                    alert('Please select both start and end dates');
+                    return;
+                }
+
+                const start = new Date(startDate);
+                const end = new Date(endDate);
+
+                if (start > end) {
+                    alert('Start date must be before end date');
+                    return;
+                }
+
+                // Disable button and show progress
+                generateIndicesBtn.disabled = true;
+                generateIndicesBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating Indices...';
+                indexProgressDiv.style.display = 'block';
+                indexProgressBar.style.width = '0%';
+                indexProgressPercent.textContent = '0%';
+
+                // Animate progress bar while generating
+                let progress = 0;
+                const progressInterval = setInterval(() => {
+                    progress = Math.min(progress + 1, 95);
+                    indexProgressBar.style.width = progress + '%';
+                    indexProgressPercent.textContent = progress + '%';
+                }, 100);
+
+                // Make API call to generate indices
+                fetch('{{ url_for("settings.generate_indices") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+                    },
+                    body: JSON.stringify({
+                        start_date: startDate,
+                        end_date: endDate
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    clearInterval(progressInterval);
+
+                    // Complete progress
+                    indexProgressBar.style.width = '100%';
+                    indexProgressPercent.textContent = '100%';
+
+                    // Re-enable button
+                    generateIndicesBtn.disabled = false;
+                    generateIndicesBtn.innerHTML = '<i class="bi bi-play-circle me-2"></i>Generate Indices';
+
+                    if (data.success) {
+                        // Count total errors across all indices
+                        let totalErrors = 0;
+                        let allErrorDetails = [];
+
+                        if (data.results.market && data.results.market.error_count) {
+                            totalErrors += data.results.market.error_count;
+                            if (data.results.market.error_details) {
+                                allErrorDetails.push(...data.results.market.error_details);
+                            }
+                        }
+
+                        Object.values(data.results.sectors || {}).forEach(sector => {
+                            if (sector.error_count) totalErrors += sector.error_count;
+                            if (sector.error_details) allErrorDetails.push(...sector.error_details);
+                        });
+
+                        Object.values(data.results.subsectors || {}).forEach(subsector => {
+                            if (subsector.error_count) totalErrors += subsector.error_count;
+                            if (subsector.error_details) allErrorDetails.push(...subsector.error_details);
+                        });
+
+                        // Show success message with error summary if applicable
+                        let warningSection = '';
+                        if (totalErrors > 0) {
+                            warningSection = `
+                                <hr>
+                                <h6 class="text-warning">
+                                    <i class="bi bi-exclamation-triangle-fill me-2"></i>Warnings: ${totalErrors} date(s) had issues
+                                </h6>
+                                ${allErrorDetails.length > 0 ? `<small class="text-muted">First few errors:<br>${allErrorDetails.slice(0, 3).join('<br>')}</small>` : ''}
+                            `;
+                        }
+
+                        const resultHtml = `
+                            <div class="alert alert-success alert-dismissible fade show mt-3">
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                <h5 class="alert-heading">
+                                    <i class="bi bi-check-circle-fill me-2"></i>Index Generation Complete
+                                </h5>
+                                <p class="mb-0">Successfully generated indices for all sectors and subsectors.</p>
+                                <hr>
+                                <h6>Summary:</h6>
+                                <ul class="mb-0">
+                                    <li>Market Index: ${data.results.market.success_count} records created, ${data.results.market.skip_count} skipped, ${data.results.market.error_count || 0} errors</li>
+                                    <li>Sector Indices: ${Object.keys(data.results.sectors).length} sectors processed</li>
+                                    <li>Subsector Indices: ${Object.keys(data.results.subsectors).length} subsectors processed</li>
+                                </ul>
+                                ${warningSection}
+                            </div>
+                        `;
+                        indexProgressDiv.insertAdjacentHTML('afterend', resultHtml);
+
+                        // Reload stats
+                        loadIndexStats();
+
+                        // Hide progress after 2 seconds
+                        setTimeout(() => {
+                            indexProgressDiv.style.display = 'none';
+                        }, 2000);
+                    } else {
+                        // Show error message
+                        const errorHtml = `
+                            <div class="alert alert-danger alert-dismissible fade show mt-3">
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                <h5 class="alert-heading">
+                                    <i class="bi bi-x-circle-fill me-2"></i>Index Generation Failed
+                                </h5>
+                                <p>${data.error || 'An error occurred while generating indices'}</p>
+                                ${data.error_details && data.error_details.length > 0 ? `
+                                    <hr>
+                                    <h6>Error Details:</h6>
+                                    <ul class="mb-0">
+                                        ${data.error_details.map(err => `<li><small>${err}</small></li>`).join('')}
+                                    </ul>
+                                ` : ''}
+                            </div>
+                        `;
+                        indexProgressDiv.insertAdjacentHTML('afterend', errorHtml);
+                        indexProgressDiv.style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    clearInterval(progressInterval);
+                    console.error('Error generating indices:', error);
+
+                    // Re-enable button
+                    generateIndicesBtn.disabled = false;
+                    generateIndicesBtn.innerHTML = '<i class="bi bi-play-circle me-2"></i>Generate Indices';
+
+                    // Show error
+                    const errorHtml = `
+                        <div class="alert alert-danger alert-dismissible fade show mt-3">
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            <h5 class="alert-heading">
+                                <i class="bi bi-x-circle-fill me-2"></i>Error
+                            </h5>
+                            <p class="mb-0">Failed to generate indices. Please try again.</p>
+                        </div>
+                    `;
+                    indexProgressDiv.insertAdjacentHTML('afterend', errorHtml);
+                    indexProgressDiv.style.display = 'none';
+                });
+            });
+        }
     });
 </script>
 {% endblock %}

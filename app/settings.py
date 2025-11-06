@@ -1068,3 +1068,179 @@ def get_marketcap_data():
             'success': False,
             'error': str(e)
         }), 500
+
+
+# ========================================================================
+# INDEX MANAGEMENT ROUTES
+# ========================================================================
+
+@settings_bp.route('/index_stats')
+@login_required
+def index_stats():
+    """Get statistics about index history data"""
+    try:
+        from app.models import IndexHistory, Sector, SubSector
+        from sqlalchemy import func
+
+        # Count total index symbols (sectors + subsectors + market)
+        sectors_with_symbol = Sector.query.filter(Sector.index_symbol != None).count()
+        subsectors_with_symbol = SubSector.query.filter(SubSector.index_symbol != None).count()
+        total_indices = sectors_with_symbol + subsectors_with_symbol + 1  # +1 for market
+
+        # Count index data points
+        data_points = IndexHistory.query.count()
+
+        # Get date range
+        earliest = db.session.query(func.min(IndexHistory.date)).scalar()
+        latest = db.session.query(func.max(IndexHistory.date)).scalar()
+
+        return jsonify({
+            'success': True,
+            'total_indices': total_indices,
+            'data_points': data_points,
+            'earliest_date': earliest.isoformat() if earliest else None,
+            'latest_date': latest.isoformat() if latest else None
+        })
+    except Exception as e:
+        current_app.logger.error(f'Error getting index stats: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/generate_indices', methods=['POST'])
+@login_required
+def generate_indices():
+    """Generate historical indices for all sectors and subsectors"""
+    try:
+        from app.historical_index_service import HistoricalIndexService
+        from datetime import date
+
+        data = request.get_json()
+        start_date_str = data.get('start_date')
+        end_date_str = data.get('end_date')
+
+        if not start_date_str or not end_date_str:
+            return jsonify({
+                'success': False,
+                'error': 'Start date and end date are required'
+            }), 400
+
+        # Parse dates
+        start_date = date.fromisoformat(start_date_str)
+        end_date = date.fromisoformat(end_date_str)
+
+        # Validate dates
+        if start_date > end_date:
+            return jsonify({
+                'success': False,
+                'error': 'Start date must be before end date'
+            }), 400
+
+        current_app.logger.info(f'Generating indices from {start_date} to {end_date}')
+
+        # Generate indices (this is synchronous for now - could be made async later)
+        result = HistoricalIndexService.generate_all_indices(start_date, end_date)
+
+        return jsonify(result)
+
+    except Exception as e:
+        current_app.logger.error(f'Error generating indices: {str(e)}')
+        import traceback
+        current_app.logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/generate_index_symbols', methods=['POST'])
+@login_required
+def generate_index_symbols():
+    """Automatically generate index symbols for all sectors and subsectors"""
+    try:
+        from app.models import Sector, SubSector
+        import re
+
+        current_app.logger.info('Auto-generating index symbols for all sectors and subsectors')
+
+        sectors_updated = 0
+        subsectors_updated = 0
+
+        # Generate symbols for sectors
+        sectors = Sector.query.filter_by(is_active=True).all()
+        for sector in sectors:
+            if not sector.index_symbol:
+                # Create symbol from name: remove special chars, take first 8 chars, uppercase
+                symbol = re.sub(r'[^A-Za-z0-9]', '', sector.name).upper()[:8]
+
+                # Ensure uniqueness
+                counter = 1
+                original_symbol = symbol
+                while Sector.query.filter_by(index_symbol=symbol).first():
+                    symbol = f"{original_symbol[:6]}{counter:02d}"
+                    counter += 1
+
+                sector.index_symbol = symbol
+                sectors_updated += 1
+                current_app.logger.info(f'Generated symbol for sector {sector.name}: {symbol}')
+
+        # Generate symbols for subsectors
+        subsectors = SubSector.query.filter_by(is_active=True).all()
+        for subsector in subsectors:
+            if not subsector.index_symbol:
+                # Create symbol from name: remove special chars, take first 8 chars, uppercase
+                symbol = re.sub(r'[^A-Za-z0-9]', '', subsector.name).upper()[:8]
+
+                # Ensure uniqueness
+                counter = 1
+                original_symbol = symbol
+                while SubSector.query.filter_by(index_symbol=symbol).first():
+                    symbol = f"{original_symbol[:6]}{counter:02d}"
+                    counter += 1
+
+                subsector.index_symbol = symbol
+                subsectors_updated += 1
+                current_app.logger.info(f'Generated symbol for subsector {subsector.name}: {symbol}')
+
+        db.session.commit()
+
+        flash(
+            f'Successfully generated index symbols: {sectors_updated} sectors, {subsectors_updated} subsectors',
+            'success'
+        )
+
+        return redirect(url_for('settings.index', active_tab='indices'))
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error generating index symbols: {str(e)}')
+        import traceback
+        current_app.logger.error(traceback.format_exc())
+        flash(f'Error generating index symbols: {str(e)}', 'danger')
+        return redirect(url_for('settings.index', active_tab='indices'))
+
+
+@settings_bp.route('/clear_index_data', methods=['POST'])
+@login_required
+def clear_index_data():
+    """Clear all index history data"""
+    try:
+        from app.historical_index_service import HistoricalIndexService
+
+        current_app.logger.info('Clearing all index history data')
+
+        result = HistoricalIndexService.clear_index_history()
+
+        if result['success']:
+            flash(f'Successfully cleared {result["deleted_count"]} index records', 'success')
+        else:
+            flash(f'Error clearing index data: {result.get("error")}', 'danger')
+
+        return redirect(url_for('settings.index', active_tab='indices'))
+
+    except Exception as e:
+        current_app.logger.error(f'Error clearing index data: {str(e)}')
+        flash(f'Error clearing index data: {str(e)}', 'danger')
+        return redirect(url_for('settings.index', active_tab='indices'))

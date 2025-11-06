@@ -32,6 +32,57 @@
     </div>
 </div>
 
+{% if sector_index %}
+<!-- Sector Index Summary -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card card-modern shadow-sm border-primary">
+            <div class="card-body">
+                <h5 class="card-title mb-3">
+                    <i class="bi bi-graph-up-arrow me-2"></i>{{ sector.name }} Sector Index
+                </h5>
+                <div class="row">
+                    <div class="col-md-6 text-center border-end">
+                        <h6 class="text-muted mb-2">Current Index Value</h6>
+                        <h1 class="mb-1 text-primary fw-bold">{{ "%.2f"|format(sector_index.index_value) }}</h1>
+                        {% if sector_index.percentage_change is not none %}
+                            {% if sector_index.change_direction == 'up' %}
+                                <span class="badge bg-success fs-6">
+                                    <i class="bi bi-arrow-up"></i> +{{ "%.2f"|format(sector_index.percentage_change) }}%
+                                </span>
+                            {% elif sector_index.change_direction == 'down' %}
+                                <span class="badge bg-danger fs-6">
+                                    <i class="bi bi-arrow-down"></i> {{ "%.2f"|format(sector_index.percentage_change) }}%
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary fs-6">0.00%</span>
+                            {% endif %}
+                        {% endif %}
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                {% if sector_index.date %}
+                                    Last Updated: {{ sector_index.date.strftime('%d %b %Y') }}
+                                {% endif %}
+                            </small>
+                        </div>
+                    </div>
+                    <div class="col-md-6 text-center">
+                        <h6 class="text-muted mb-2">Index Details</h6>
+                        <p class="mb-1">Free-Float Market Cap Weighted</p>
+                        <small class="text-muted">Base: 1000 (Jul 1, 2025)</small>
+                        {% if sector.index_symbol %}
+                            <div class="mt-2">
+                                <span class="badge bg-info">{{ sector.index_symbol }}</span>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Statistics Cards -->
 <div class="row mb-4">
     <div class="col-md-4">
@@ -107,8 +158,9 @@
                 <thead class="table-light">
                     <tr>
                         <th>Sub-Sector Name</th>
-                        <th>Description</th>
-                        <th class="text-center">Stocks Assigned</th>
+                        <th class="text-center">Index Value</th>
+                        <th class="text-center">Change</th>
+                        <th class="text-center">Stocks</th>
                         <th class="text-center">Status</th>
                         <th class="text-end">Actions</th>
                     </tr>
@@ -118,9 +170,36 @@
                     <tr>
                         <td>
                             <strong>{{ item.subsector.name }}</strong>
+                            {% if item.subsector.description %}
+                            <br><small class="text-muted">{{ item.subsector.description[:60] }}{% if item.subsector.description|length > 60 %}...{% endif %}</small>
+                            {% endif %}
                         </td>
-                        <td>
-                            <small class="text-muted">{{ item.subsector.description or '-' }}</small>
+                        <td class="text-center">
+                            {% if item.index_value %}
+                            <strong class="text-primary">{{ "%.2f"|format(item.index_value) }}</strong>
+                            {% if item.index_date %}
+                            <br><small class="text-muted">{{ item.index_date.strftime('%d %b') }}</small>
+                            {% endif %}
+                            {% else %}
+                            <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if item.percentage_change is not none %}
+                                {% if item.change_direction == 'up' %}
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-arrow-up"></i> +{{ "%.2f"|format(item.percentage_change) }}%
+                                    </span>
+                                {% elif item.change_direction == 'down' %}
+                                    <span class="badge bg-danger">
+                                        <i class="bi bi-arrow-down"></i> {{ "%.2f"|format(item.percentage_change) }}%
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-secondary">0.00%</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">N/A</span>
+                            {% endif %}
                         </td>
                         <td class="text-center">
                             <span class="badge {% if item.stock_count > 0 %}bg-success{% else %}bg-secondary{% endif %}">

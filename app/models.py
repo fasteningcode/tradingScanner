@@ -75,6 +75,7 @@ class Sector(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    index_symbol = db.Column(db.String(10), unique=True, nullable=True, index=True)  # Short index symbol (e.g., "BNK-IDX")
     description = db.Column(db.Text, nullable=True)
     icon = db.Column(db.String(50), nullable=True)  # Bootstrap icon class
     color = db.Column(db.String(20), nullable=True)  # Color for visualization
@@ -114,6 +115,7 @@ class SubSector(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False, index=True)
     sector_id = db.Column(db.Integer, db.ForeignKey('sectors.id'), nullable=False, index=True)
+    index_symbol = db.Column(db.String(10), unique=True, nullable=True, index=True)  # Short index symbol (e.g., "BNK-PVT")
     description = db.Column(db.Text, nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
     display_order = db.Column(db.Integer, default=0, nullable=False)
@@ -816,6 +818,106 @@ class MarketCapFetchTask(db.Model):
             'started_at': self.started_at.isoformat() if self.started_at else None,
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
             'error_message': self.error_message
+        }
+
+
+class SectorIndex(db.Model):
+    """Model for storing calculated sector/subsector indices"""
+
+    __tablename__ = 'sector_indices'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Index type and reference
+    index_type = db.Column(db.String(20), nullable=False, index=True)  # 'market', 'sector', 'subsector'
+    sector_id = db.Column(db.Integer, db.ForeignKey('sectors.id'), nullable=True, index=True)
+    subsector_id = db.Column(db.Integer, db.ForeignKey('sub_sectors.id'), nullable=True, index=True)
+
+    # Index values
+    index_value = db.Column(db.Float, nullable=False)  # Calculated index value
+    total_market_cap = db.Column(db.Float, nullable=True)  # Total market cap (in crores)
+    stock_count = db.Column(db.Integer, nullable=True)  # Number of stocks in index
+
+    # Change tracking (optional - for future use with historical data)
+    change_1d = db.Column(db.Float, nullable=True)  # 1-day change percentage
+    change_1w = db.Column(db.Float, nullable=True)  # 1-week change percentage
+    change_1m = db.Column(db.Float, nullable=True)  # 1-month change percentage
+
+    # Timestamps
+    calculated_at = db.Column(db.DateTime, nullable=False, index=True)  # When index was calculated
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    sector = db.relationship('Sector', foreign_keys=[sector_id], backref=db.backref('indices', lazy='dynamic'))
+    subsector = db.relationship('SubSector', foreign_keys=[subsector_id], backref=db.backref('indices', lazy='dynamic'))
+
+    # Add unique constraint for each index type
+    __table_args__ = (
+        db.Index('idx_sector_index_type', 'index_type', 'sector_id', 'subsector_id'),
+    )
+
+    def __repr__(self):
+        if self.index_type == 'market':
+            return f'<SectorIndex Market value={self.index_value:.2f}>'
+        elif self.index_type == 'sector':
+            return f'<SectorIndex Sector:{self.sector_id} value={self.index_value:.2f}>'
+        else:
+            return f'<SectorIndex SubSector:{self.subsector_id} value={self.index_value:.2f}>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'index_type': self.index_type,
+            'sector_id': self.sector_id,
+            'subsector_id': self.subsector_id,
+            'index_value': self.index_value,
+            'total_market_cap': self.total_market_cap,
+            'stock_count': self.stock_count,
+            'change_1d': self.change_1d,
+            'change_1w': self.change_1w,
+            'change_1m': self.change_1m,
+            'calculated_at': self.calculated_at.isoformat() if self.calculated_at else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+class IndexHistory(db.Model):
+    """Model for storing daily historical index values"""
+
+    __tablename__ = 'index_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+    index_symbol = db.Column(db.String(10), nullable=False, index=True)
+    date = db.Column(db.Date, nullable=False, index=True)
+    index_value = db.Column(db.Float, nullable=False)
+    index_calculated_date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Unique constraint: no duplicate calculations for same (symbol, date)
+    __table_args__ = (
+        db.UniqueConstraint('index_symbol', 'date', name='uq_index_symbol_date'),
+        db.Index('idx_index_history_lookup', 'index_symbol', 'date'),
+    )
+
+    def __repr__(self):
+        return f'<IndexHistory {self.index_symbol} {self.date} value={self.index_value:.2f}>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'index_symbol': self.index_symbol,
+            'date': self.date.isoformat() if self.date else None,
+            'index_value': self.index_value,
+            'index_calculated_date': self.index_calculated_date.isoformat() if self.index_calculated_date else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
 
 
