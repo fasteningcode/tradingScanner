@@ -214,6 +214,11 @@ class Instrument(db.Model):
     # NIFTY 500 flag
     is_nifty500 = db.Column(db.Boolean, default=False, nullable=False, index=True)
 
+    # Stock Stage Analysis fields
+    current_stage = db.Column(db.Integer, nullable=True, index=True)  # 1-4 (Weinstein stages)
+    stage_updated_at = db.Column(db.DateTime, nullable=True)  # When stage was last calculated
+    stage_confidence = db.Column(db.Float, nullable=True)  # 0-100 confidence score
+
     # Timestamps
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -993,6 +998,73 @@ class StageAnalysisHistory(db.Model):
             'moving_avg_150': self.moving_avg_150,
             'current_price': self.current_price,
             'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class StockStageAnalysisTask(db.Model):
+    """Model for tracking stock stage analysis tasks"""
+
+    __tablename__ = 'stock_stage_analysis_tasks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+
+    # Filter configuration
+    filter_type = db.Column(db.String(20), default='nifty500', nullable=False)  # 'nifty500', 'all', 'sector', 'subsector'
+    sector_id = db.Column(db.Integer, db.ForeignKey('sectors.id'), nullable=True, index=True)
+    subsector_id = db.Column(db.Integer, db.ForeignKey('sub_sectors.id'), nullable=True, index=True)
+
+    # Progress tracking
+    status = db.Column(db.String(20), default='pending', nullable=False, index=True)  # 'pending', 'running', 'completed', 'failed', 'cancelled'
+    progress_percentage = db.Column(db.Float, default=0.0)
+    total_stocks = db.Column(db.Integer, default=0)
+    analyzed_stocks = db.Column(db.Integer, default=0)
+    failed_stocks = db.Column(db.Integer, default=0)
+    skipped_stocks = db.Column(db.Integer, default=0)  # Insufficient data
+    current_stock_symbol = db.Column(db.String(50), nullable=True)
+
+    # Timestamps
+    started_at = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Error handling
+    error_message = db.Column(db.Text, nullable=True)
+
+    # Relationships
+    user = db.relationship('User', backref=db.backref('stock_stage_analysis_tasks', lazy='dynamic', cascade='all, delete-orphan'))
+    sector = db.relationship('Sector', foreign_keys=[sector_id])
+    subsector = db.relationship('SubSector', foreign_keys=[subsector_id])
+
+    def __repr__(self):
+        return f'<StockStageAnalysisTask {self.id} User:{self.user_id} Status:{self.status}>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        # Calculate ETA if running
+        eta_seconds = None
+        if self.status == 'running' and self.analyzed_stocks > 0 and self.started_at:
+            elapsed = (datetime.utcnow() - self.started_at).total_seconds()
+            avg_time_per_stock = elapsed / self.analyzed_stocks
+            remaining_stocks = self.total_stocks - self.analyzed_stocks
+            eta_seconds = int(avg_time_per_stock * remaining_stocks)
+
+        return {
+            'id': self.id,
+            'filter_type': self.filter_type,
+            'sector_id': self.sector_id,
+            'subsector_id': self.subsector_id,
+            'status': self.status,
+            'progress_percentage': round(self.progress_percentage, 2),
+            'total_stocks': self.total_stocks,
+            'analyzed_stocks': self.analyzed_stocks,
+            'failed_stocks': self.failed_stocks,
+            'skipped_stocks': self.skipped_stocks,
+            'current_stock_symbol': self.current_stock_symbol,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'error_message': self.error_message,
+            'eta_seconds': eta_seconds
         }
 
 
