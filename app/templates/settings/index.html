@@ -418,7 +418,7 @@
                         </div>
 
                         <!-- Settings Form -->
-                        <form method="POST" action="{{ url_for('settings.update_historical_data_settings') }}">
+                        <form id="historicalDataForm" method="POST" action="{{ url_for('settings.update_historical_data_settings') }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
                             <div class="card mb-4">

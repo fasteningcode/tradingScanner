@@ -602,6 +602,11 @@ class DownloadTask(db.Model):
     to_date = db.Column(db.Date, nullable=False)
     requests_per_second = db.Column(db.Integer, default=1)
 
+    # Incremental sync configuration
+    sync_mode = db.Column(db.String(20), default='full')  # 'full', 'incremental', 'gap_fill'
+    target_stocks = db.Column(db.Text, nullable=True)  # JSON array of specific symbols to sync (optional)
+    auto_calculate_index = db.Column(db.Boolean, default=False)  # Auto-trigger index calculation after sync
+
     # Progress tracking
     status = db.Column(db.String(20), default='pending', nullable=False, index=True)  # 'pending', 'running', 'paused', 'completed', 'failed', 'cancelled'
     progress_percentage = db.Column(db.Float, default=0.0)
@@ -652,7 +657,10 @@ class DownloadTask(db.Model):
             'started_at': self.started_at.isoformat() if self.started_at else None,
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
             'error_message': self.error_message,
-            'error_count': self.error_count
+            'error_count': self.error_count,
+            'sync_mode': self.sync_mode,
+            'target_stocks': self.target_stocks,
+            'auto_calculate_index': self.auto_calculate_index
         }
 
     def calculate_eta(self):

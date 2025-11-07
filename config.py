@@ -31,6 +31,11 @@ class Config:
     # Remember me cookie duration (in days)
     REMEMBER_COOKIE_DURATION = 30
 
+    # CSRF Protection - disable token expiration to prevent timeout issues
+    # Users can keep settings pages open without token expiring
+    # Session timeout still applies for security
+    WTF_CSRF_TIME_LIMIT = None
+
     # Logging configuration
     LOG_DIR = os.path.join(basedir, 'logs')
     LOG_MAX_BYTES = 10 * 1024 * 1024  # 10MB

@@ -480,9 +480,45 @@ class HistoricalDataDownloader:
 
         return chunks
 
+    def _merge_candles(self, existing_candles: List[Dict[str, Any]], new_candles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Merge new candles with existing candles, removing duplicates and sorting by date.
+
+        Args:
+            existing_candles: List of existing candle dictionaries
+            new_candles: List of new candle dictionaries to merge
+
+        Returns:
+            Merged list of candles sorted by date (oldest first), with duplicates removed
+            (newer candles overwrite older ones for the same date)
+        """
+        # Create a dictionary indexed by date for efficient lookups and deduplication
+        candles_dict = {}
+
+        # Add existing candles first
+        for candle in existing_candles:
+            candle_date = candle['date']
+            candles_dict[candle_date] = candle
+
+        # Add/overwrite with new candles (newer data takes precedence)
+        for candle in new_candles:
+            candle_date = candle['date']
+            candles_dict[candle_date] = candle
+
+        # Sort by date (oldest to newest) and return as list
+        sorted_candles = sorted(candles_dict.values(), key=lambda x: x['date'])
+
+        current_app.logger.debug(
+            f"Merged candles: {len(existing_candles)} existing + {len(new_candles)} new = "
+            f"{len(sorted_candles)} total (removed {len(existing_candles) + len(new_candles) - len(sorted_candles)} duplicates)"
+        )
+
+        return sorted_candles
+
     def _store_candles(self, tradingsymbol: str, candles: List[Dict[str, Any]], interval: str):
         """
-        Store candles in database as JSON (one row per stock per interval)
+        Store candles in database as JSON (one row per stock per interval).
+        Supports both full replacement and incremental merging based on task sync_mode.
 
         Args:
             tradingsymbol: Trading symbol of the instrument
@@ -521,10 +557,29 @@ class HistoricalDataDownloader:
                 interval=interval
             ).first()
 
+            # Determine if we should merge or replace based on task sync_mode
+            sync_mode = getattr(self.task, 'sync_mode', 'full')
+            should_merge = sync_mode in ['incremental', 'gap_fill']
+
             if existing:
-                # Replace entire JSON (as per user preference)
-                existing.set_candles(candles_json)
+                if should_merge:
+                    # Incremental mode: Merge new candles with existing
+                    current_app.logger.debug(f"Merging candles for {tradingsymbol} (sync_mode={sync_mode})")
+                    existing_candles = existing.get_candles()
+                    merged_candles = self._merge_candles(existing_candles, candles_json)
+                    existing.set_candles(merged_candles)
+                    current_app.logger.info(
+                        f"Merged {len(candles_json)} new candles with {len(existing_candles)} existing "
+                        f"for {tradingsymbol}, total now: {len(merged_candles)}"
+                    )
+                else:
+                    # Full replacement mode (default/legacy behavior)
+                    current_app.logger.debug(f"Replacing candles for {tradingsymbol} (sync_mode={sync_mode})")
+                    existing.set_candles(candles_json)
+                    current_app.logger.info(f"Replaced with {len(candles_json)} candles for {tradingsymbol}")
+
                 existing.last_downloaded = datetime.utcnow()
+                existing.updated_on = datetime.utcnow()
             else:
                 # Create new record
                 new_data = HistoricalData(
@@ -536,9 +591,10 @@ class HistoricalDataDownloader:
                     updated_on=datetime.utcnow()
                 )
                 db.session.add(new_data)
+                current_app.logger.info(f"Created new record with {len(candles_json)} candles for {tradingsymbol}")
 
             db.session.commit()
-            current_app.logger.debug(f"Stored {len(candles_json)} candles for {tradingsymbol} ({interval})")
+            current_app.logger.debug(f"Stored candles for {tradingsymbol} ({interval})")
 
         except Exception as e:
             db.session.rollback()
