@@ -267,6 +267,10 @@ class StageAnalyzer:
                             current_app.logger.info(
                                 f"Stage analysis task {self.task_id}: {sector.index_symbol} = Stage {stage_result['stage']}"
                             )
+                        else:
+                            current_app.logger.warning(
+                                f"Stage analysis task {self.task_id}: Skipping {sector.index_symbol} - insufficient data"
+                            )
 
                         self.task.analyzed_symbols += 1
                         self.task.progress_percentage = (self.task.analyzed_symbols / self.task.total_symbols) * 100
@@ -301,6 +305,10 @@ class StageAnalyzer:
 
                             current_app.logger.info(
                                 f"Stage analysis task {self.task_id}: {subsector.index_symbol} = Stage {stage_result['stage']}"
+                            )
+                        else:
+                            current_app.logger.warning(
+                                f"Stage analysis task {self.task_id}: Skipping {subsector.index_symbol} - insufficient data"
                             )
 
                         self.task.analyzed_symbols += 1
@@ -350,7 +358,7 @@ class StageAnalyzer:
         try:
             # Get historical data (need at least 150 days for 150-day MA)
             end_date = analysis_date or date.today()
-            start_date = end_date - timedelta(days=200)  # Get extra days to ensure 150 data points
+            start_date = end_date - timedelta(days=300)  # Increased to account for weekends/holidays
 
             history = IndexHistory.query.filter_by(index_symbol=index_symbol).filter(
                 IndexHistory.date >= start_date,
@@ -359,7 +367,8 @@ class StageAnalyzer:
 
             if len(history) < 150:
                 current_app.logger.warning(
-                    f"Insufficient data for {index_symbol}: {len(history)} days (need 150)"
+                    f"Insufficient data for {index_symbol}: {len(history)} days (need 150). "
+                    f"Date range: {start_date} to {end_date}"
                 )
                 return None
 
