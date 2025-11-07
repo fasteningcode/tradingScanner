@@ -259,6 +259,7 @@ class StageAnalyzer:
                             sector.current_stage = stage_result['stage']
                             sector.stage_confidence = stage_result['confidence']
                             sector.stage_updated_at = datetime.utcnow()
+                            db.session.add(sector)  # Explicitly add to session to track changes
 
                             # Save to history
                             self._save_stage_history(sector.index_symbol, stage_result)
@@ -293,6 +294,7 @@ class StageAnalyzer:
                             subsector.current_stage = stage_result['stage']
                             subsector.stage_confidence = stage_result['confidence']
                             subsector.stage_updated_at = datetime.utcnow()
+                            db.session.add(subsector)  # Explicitly add to session to track changes
 
                             # Save to history
                             self._save_stage_history(subsector.index_symbol, stage_result)
