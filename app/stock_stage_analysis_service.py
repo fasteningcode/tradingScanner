@@ -37,34 +37,45 @@ def start_stock_stage_analysis(user_id: int, filter_type: str = 'nifty500',
     Returns:
         Task ID if started successfully, None otherwise
     """
-    from app import create_app
-    if app is None:
-        app = create_app()
+    try:
+        current_app.logger.info(
+            f'Starting stock stage analysis for user {user_id}, '
+            f'filter_type={filter_type}, sector_id={sector_id}, subsector_id={subsector_id}'
+        )
 
-    # Create new task
-    task = StockStageAnalysisTask(
-        user_id=user_id,
-        filter_type=filter_type,
-        sector_id=sector_id,
-        subsector_id=subsector_id,
-        status='pending'
-    )
-    db.session.add(task)
-    db.session.commit()
+        # Create new task
+        task = StockStageAnalysisTask(
+            user_id=user_id,
+            filter_type=filter_type,
+            sector_id=sector_id,
+            subsector_id=subsector_id,
+            status='pending'
+        )
+        db.session.add(task)
+        db.session.commit()
 
-    task_id = task.id
-    current_app.logger.info(f'Created stock stage analysis task {task_id} for user {user_id}')
+        task_id = task.id
+        current_app.logger.info(f'Created stock stage analysis task {task_id} for user {user_id}')
 
-    # Start analysis in background thread
-    thread = threading.Thread(
-        target=_run_stock_stage_analysis,
-        args=(task_id, app),
-        daemon=True
-    )
-    thread.start()
-    _running_tasks[task_id] = thread
+        # Get app context if not provided
+        if app is None:
+            app = current_app._get_current_object()
 
-    return task_id
+        # Start analysis in background thread
+        thread = threading.Thread(
+            target=_run_stock_stage_analysis,
+            args=(task_id, app),
+            daemon=True
+        )
+        thread.start()
+        _running_tasks[task_id] = thread
+
+        current_app.logger.info(f'Stock stage analysis task {task_id} thread started')
+        return task_id
+
+    except Exception as e:
+        current_app.logger.error(f'Error starting stock stage analysis: {str(e)}', exc_info=True)
+        return None
 
 
 def get_stock_stage_analysis_status(user_id: int) -> Optional[Dict]:
@@ -121,20 +132,33 @@ def _run_stock_stage_analysis(task_id: int, app):
     """
     with app.app_context():
         try:
+            current_app.logger.info(f'Stock stage analysis task {task_id}: Starting background execution')
             analyzer = StockStageAnalyzer(task_id)
             analyzer.run()
+            current_app.logger.info(f'Stock stage analysis task {task_id}: Completed successfully')
         except Exception as e:
-            current_app.logger.error(f'Stock stage analysis task {task_id} failed: {str(e)}', exc_info=True)
-            task = StockStageAnalysisTask.query.get(task_id)
-            if task:
-                task.status = 'failed'
-                task.error_message = str(e)
-                task.completed_at = datetime.utcnow()
-                db.session.commit()
+            current_app.logger.error(
+                f'Stock stage analysis task {task_id} failed: {str(e)}',
+                exc_info=True
+            )
+            try:
+                task = StockStageAnalysisTask.query.get(task_id)
+                if task:
+                    task.status = 'failed'
+                    task.error_message = str(e)
+                    task.completed_at = datetime.utcnow()
+                    db.session.commit()
+                    current_app.logger.info(f'Stock stage analysis task {task_id}: Marked as failed in database')
+            except Exception as db_error:
+                current_app.logger.error(
+                    f'Stock stage analysis task {task_id}: Failed to update task status: {str(db_error)}',
+                    exc_info=True
+                )
         finally:
             # Remove from running tasks
             if task_id in _running_tasks:
                 del _running_tasks[task_id]
+                current_app.logger.info(f'Stock stage analysis task {task_id}: Removed from running tasks')
 
 
 class StockStageAnalyzer:
@@ -148,14 +172,18 @@ class StockStageAnalyzer:
 
     def run(self):
         """Execute the stock stage analysis"""
-        current_app.logger.info(f'Starting stock stage analysis task {self.task_id}')
+        current_app.logger.info(f'Stock stage analysis task {self.task_id}: Starting run()')
 
         # Update task status to running
         self.task.status = 'running'
         self.task.started_at = datetime.utcnow()
         db.session.commit()
+        current_app.logger.info(f'Stock stage analysis task {self.task_id}: Status set to running')
 
         # Get stocks to analyze based on filter
+        current_app.logger.info(
+            f'Stock stage analysis task {self.task_id}: Getting stocks to analyze with filter_type={self.task.filter_type}'
+        )
         stocks = self._get_stocks_to_analyze()
         self.task.total_stocks = len(stocks)
         db.session.commit()
@@ -163,6 +191,13 @@ class StockStageAnalyzer:
         current_app.logger.info(
             f'Stock stage analysis task {self.task_id}: Found {len(stocks)} stocks to analyze'
         )
+
+        if len(stocks) == 0:
+            current_app.logger.warning(f'Stock stage analysis task {self.task_id}: No stocks found to analyze')
+            self.task.status = 'completed'
+            self.task.completed_at = datetime.utcnow()
+            db.session.commit()
+            return
 
         # Analyze each stock
         for stock in stocks:
