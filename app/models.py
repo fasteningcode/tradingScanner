@@ -705,18 +705,73 @@ class DownloadLog(db.Model):
     def __repr__(self):
         return f'<DownloadLog Task:{self.task_id} {self.symbol} Status:{self.status}>'
 
+
+class SyncTask(db.Model):
+    """Model for tracking incremental historical data sync tasks"""
+
+    __tablename__ = 'sync_tasks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+
+    # Task configuration
+    interval = db.Column(db.String(20), nullable=False)  # Candle interval being synced
+
+    # Progress tracking
+    status = db.Column(db.String(20), default='pending', nullable=False, index=True)  # 'pending', 'running', 'completed', 'failed', 'cancelled'
+    progress_percentage = db.Column(db.Float, default=0.0)
+    total_stocks = db.Column(db.Integer, default=0)
+    synced_stocks = db.Column(db.Integer, default=0)
+    failed_stocks = db.Column(db.Integer, default=0)
+    skipped_stocks = db.Column(db.Integer, default=0)  # Already up to date
+    new_candles_added = db.Column(db.Integer, default=0)  # Total new candles added across all stocks
+
+    # Timestamps
+    started_at = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Error handling
+    error_message = db.Column(db.Text, nullable=True)
+
+    # Relationships
+    user = db.relationship('User', backref=db.backref('sync_tasks', lazy='dynamic', cascade='all, delete-orphan'))
+
+    def __repr__(self):
+        return f'<SyncTask {self.id} User:{self.user_id} Status:{self.status} Progress:{self.progress_percentage}%>'
+
     def to_dict(self):
         """Convert to dictionary for JSON serialization"""
+        # Calculate progress
+        if self.total_stocks > 0:
+            self.progress_percentage = (self.synced_stocks / self.total_stocks) * 100
+        else:
+            self.progress_percentage = 0.0
+
+        # Calculate ETA
+        eta_seconds = None
+        if self.status == 'running' and self.started_at and self.synced_stocks > 0:
+            elapsed = (datetime.utcnow() - self.started_at).total_seconds()
+            avg_time_per_stock = elapsed / self.synced_stocks
+            remaining_stocks = self.total_stocks - self.synced_stocks
+            eta_seconds = int(remaining_stocks * avg_time_per_stock)
+
         return {
             'id': self.id,
-            'symbol': self.symbol,
+            'user_id': self.user_id,
             'status': self.status,
-            'records_downloaded': self.records_downloaded,
-            'api_calls_made': self.api_calls_made,
+            'progress_percentage': round(self.progress_percentage, 2),
+            'total_stocks': self.total_stocks,
+            'synced_stocks': self.synced_stocks,
+            'failed_stocks': self.failed_stocks,
+            'skipped_stocks': self.skipped_stocks,
+            'new_candles_added': self.new_candles_added,
+            'interval': self.interval,
             'started_at': self.started_at.isoformat() if self.started_at else None,
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
             'error_message': self.error_message,
-            'retry_count': self.retry_count
+            'eta_seconds': eta_seconds
         }
 
 

@@ -76,6 +76,16 @@
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
+                        <button class="nav-link {{ 'active' if active_tab == 'storage' else '' }}"
+                                id="storage-tab"
+                                data-bs-toggle="tab"
+                                data-bs-target="#storage"
+                                type="button"
+                                role="tab">
+                            <i class="bi bi-folder2 me-2"></i>Files & Storage
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
                         <button class="nav-link {{ 'active' if active_tab == 'about' else '' }}"
                                 id="about-tab"
                                 data-bs-toggle="tab"
@@ -646,6 +656,96 @@
                             </div>
                         </div>
 
+                        <!-- Sync Latest Data -->
+                        <div class="card mt-4" id="syncControlPanel">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="card-title mb-0">
+                                    <i class="bi bi-arrow-repeat me-2"></i>Sync Latest Data
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle me-2"></i>
+                                    Sync the latest candlestick data from Kite API for all stocks that already have historical data. This will fetch only new candles since the last download without duplicates.
+                                </div>
+
+                                <!-- Sync Status -->
+                                <div id="syncStatusContainer">
+                                    <div class="alert alert-secondary" id="syncIdleStatus">
+                                        <i class="bi bi-info-circle me-2"></i>
+                                        Click "Sync Latest Candles" to update your historical data with the latest candles.
+                                    </div>
+
+                                    <!-- Active Sync Progress -->
+                                    <div id="activeSyncStatus" style="display: none;">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <div>
+                                                <span class="badge bg-success" id="syncStatusBadge">Syncing</span>
+                                            </div>
+                                            <div>
+                                                <span id="syncProgressText">0 / 0 stocks</span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Progress Bar -->
+                                        <div class="progress mb-3" style="height: 25px;">
+                                            <div class="progress-bar bg-success progress-bar-striped progress-bar-animated"
+                                                 id="syncProgressBar"
+                                                 role="progressbar"
+                                                 style="width: 0%;">
+                                                <span id="syncProgressPercentage">0%</span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Stats Grid -->
+                                        <div class="row g-2 mb-3">
+                                            <div class="col-6 col-md-3">
+                                                <div class="p-2 bg-light rounded text-center">
+                                                    <small class="text-muted d-block">Synced</small>
+                                                    <strong class="text-success" id="syncedStocksCount">0</strong>
+                                                </div>
+                                            </div>
+                                            <div class="col-6 col-md-3">
+                                                <div class="p-2 bg-light rounded text-center">
+                                                    <small class="text-muted d-block">Skipped</small>
+                                                    <strong class="text-warning" id="skippedStocksCount">0</strong>
+                                                </div>
+                                            </div>
+                                            <div class="col-6 col-md-3">
+                                                <div class="p-2 bg-light rounded text-center">
+                                                    <small class="text-muted d-block">Failed</small>
+                                                    <strong class="text-danger" id="failedSyncStocksCount">0</strong>
+                                                </div>
+                                            </div>
+                                            <div class="col-6 col-md-3">
+                                                <div class="p-2 bg-light rounded text-center">
+                                                    <small class="text-muted d-block">New Candles</small>
+                                                    <strong class="text-primary" id="newCandlesCount">0</strong>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Additional Info -->
+                                        <div class="small text-muted">
+                                            <div><strong>Started:</strong> <span id="syncStartTime">--</span></div>
+                                            <div><strong>ETA:</strong> <span id="syncEtaDisplay">--</span></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Action Buttons -->
+                                <div class="mt-3">
+                                    <button type="button" class="btn btn-success" id="startSyncBtn" onclick="startSync()">
+                                        <i class="bi bi-arrow-repeat me-2"></i>Sync Latest Candles
+                                    </button>
+
+                                    <button type="button" class="btn btn-danger" id="cancelSyncBtn" style="display: none;" onclick="cancelSync()">
+                                        <i class="bi bi-x-circle me-2"></i>Cancel Sync
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Data Management -->
                         <div class="card mt-4">
                             <div class="card-header">
@@ -965,6 +1065,161 @@
                                 <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#clearIndicesModal">
                                     <i class="bi bi-trash me-2"></i>Clear All Index Data
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Files & Storage Tab -->
+                    <div class="tab-pane fade {{ 'show active' if active_tab == 'storage' else '' }}"
+                         id="storage"
+                         role="tabpanel">
+                        <h4 class="mb-3">Files & Storage Management</h4>
+
+                        <!-- Storage Analysis Section -->
+                        <div class="card mb-4">
+                            <div class="card-header bg-info text-white">
+                                <h5 class="mb-0">
+                                    <i class="bi bi-pie-chart me-2"></i>Storage Analysis
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row" id="storageStats">
+                                    <div class="col-md-3 mb-3">
+                                        <div class="p-3 bg-light rounded">
+                                            <div class="text-muted small">Database Size</div>
+                                            <div class="h5 mb-0" id="dbSize">Loading...</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 mb-3">
+                                        <div class="p-3 bg-light rounded">
+                                            <div class="text-muted small">Log Files</div>
+                                            <div class="h5 mb-0" id="logSize">Loading...</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 mb-3">
+                                        <div class="p-3 bg-light rounded">
+                                            <div class="text-muted small">Backup Files</div>
+                                            <div class="h5 mb-0" id="backupSize">Loading...</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 mb-3">
+                                        <div class="p-3 bg-light rounded">
+                                            <div class="text-muted small">Temp Files</div>
+                                            <div class="h5 mb-0" id="tempSize">Loading...</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-primary btn-sm" onclick="refreshStorageStats()">
+                                    <i class="bi bi-arrow-clockwise me-2"></i>Refresh
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Project Organization Section -->
+                        <div class="card mb-4">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="mb-0">
+                                    <i class="bi bi-folder-symlink me-2"></i>Project Organization
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div id="organizationStatus" class="mb-3">
+                                    <div class="spinner-border spinner-border-sm" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <span class="ms-2">Checking organization status...</span>
+                                </div>
+
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle me-2"></i>
+                                    <strong>What does this do?</strong> Organizes your project files into proper directories:
+                                    <ul class="mb-0 mt-2">
+                                        <li>Moves test files to <code>tests/</code> directory</li>
+                                        <li>Moves utility scripts to <code>scripts/</code> directory</li>
+                                        <li>Archives debug documentation to <code>docs/archive/</code></li>
+                                        <li>Updates import paths automatically</li>
+                                    </ul>
+                                </div>
+
+                                <div id="organizePreview" style="display: none;">
+                                    <h6 class="mt-3">Files to be moved:</h6>
+                                    <div id="organizeFileList" class="small"></div>
+                                </div>
+
+                                <button type="button" class="btn btn-success" onclick="previewOrganization()">
+                                    <i class="bi bi-eye me-2"></i>Preview Changes
+                                </button>
+                                <button type="button" class="btn btn-primary" onclick="organizeProject()" id="organizeBtn">
+                                    <i class="bi bi-folder-check me-2"></i>Organize Project
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Cleanup Operations Section -->
+                        <div class="card mb-4">
+                            <div class="card-header bg-warning text-dark">
+                                <h5 class="mb-0">
+                                    <i class="bi bi-broom me-2"></i>Cleanup Operations
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <h6 class="card-title">
+                                                    <i class="bi bi-file-earmark-x text-danger me-2"></i>Clean Temporary Files
+                                                </h6>
+                                                <p class="card-text small">Remove temporary database files and cache files.</p>
+                                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="cleanTempFiles()">
+                                                    <i class="bi bi-trash me-2"></i>Clean Temp Files
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6 mb-3">
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <h6 class="card-title">
+                                                    <i class="bi bi-file-text text-primary me-2"></i>Clean Old Logs
+                                                </h6>
+                                                <p class="card-text small">Remove log entries older than 7 days.</p>
+                                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="cleanLogs()">
+                                                    <i class="bi bi-scissors me-2"></i>Clean Logs
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6 mb-3">
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <h6 class="card-title">
+                                                    <i class="bi bi-archive text-info me-2"></i>Clean Old Backups
+                                                </h6>
+                                                <p class="card-text small">Keep only the 5 most recent database backups.</p>
+                                                <button type="button" class="btn btn-sm btn-outline-info" onclick="cleanBackups()">
+                                                    <i class="bi bi-trash me-2"></i>Clean Backups
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6 mb-3">
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <h6 class="card-title">
+                                                    <i class="bi bi-database-gear text-success me-2"></i>Optimize Database
+                                                </h6>
+                                                <p class="card-text small">Vacuum SQLite database to reclaim unused space.</p>
+                                                <button type="button" class="btn btn-sm btn-outline-success" onclick="vacuumDatabase()">
+                                                    <i class="bi bi-arrow-repeat me-2"></i>Vacuum DB
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -2018,6 +2273,556 @@
                     indexProgressDiv.style.display = 'none';
                 });
             });
+        }
+
+        // ========================================================================
+        // FILES & STORAGE TAB FUNCTIONS
+        // ========================================================================
+
+        // Refresh storage statistics
+        function refreshStorageStats() {
+            fetch('/settings/storage/analyze')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const stats = data.stats;
+                        document.getElementById('dbSize').textContent = stats.database.readable;
+                        document.getElementById('logSize').textContent = stats.logs.readable;
+                        document.getElementById('backupSize').textContent = `${stats.backups.readable} (${stats.backups.count} files)`;
+                        document.getElementById('tempSize').textContent = `${stats.temp_files.readable} (${stats.temp_files.count} files)`;
+                    }
+                })
+                .catch(error => console.error('Error refreshing storage stats:', error));
+        }
+
+        // Check organization status
+        function checkOrganizationStatus() {
+            fetch('/settings/storage/organization-status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const status = data.status;
+                        const statusDiv = document.getElementById('organizationStatus');
+
+                        if (status.is_organized) {
+                            statusDiv.innerHTML = `
+                                <div class="alert alert-success">
+                                    <i class="bi bi-check-circle-fill me-2"></i>
+                                    <strong>Project is organized!</strong> All files are in their proper locations.
+                                </div>
+                            `;
+                            document.getElementById('organizeBtn').disabled = true;
+                        } else {
+                            statusDiv.innerHTML = `
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                    <strong>Project needs organization</strong>
+                                    <ul class="mb-0 mt-2">
+                                        ${status.tests_in_root.length > 0 ? `<li>${status.tests_in_root.length} test files in root</li>` : ''}
+                                        ${status.scripts_in_root.length > 0 ? `<li>${status.scripts_in_root.length} script files in root</li>` : ''}
+                                        ${status.docs_in_root.length > 0 ? `<li>${status.docs_in_root.length} doc files in root</li>` : ''}
+                                    </ul>
+                                </div>
+                            `;
+                            document.getElementById('organizeBtn').disabled = false;
+                        }
+                    }
+                })
+                .catch(error => console.error('Error checking organization status:', error));
+        }
+
+        // Preview organization changes
+        function previewOrganization() {
+            fetch('/settings/storage/organize-project', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ dry_run: true })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const results = data.results;
+                    const previewDiv = document.getElementById('organizePreview');
+                    const fileListDiv = document.getElementById('organizeFileList');
+
+                    if (results.moved_files.length === 0) {
+                        fileListDiv.innerHTML = '<div class="alert alert-info">No files need to be moved. Project is already organized!</div>';
+                    } else {
+                        let html = '<div class="list-group">';
+                        results.moved_files.forEach(file => {
+                            html += `
+                                <div class="list-group-item">
+                                    <strong>${file.file}</strong>
+                                    <br><small class="text-muted">${file.from} → ${file.to}</small>
+                                </div>
+                            `;
+                        });
+                        html += '</div>';
+                        fileListDiv.innerHTML = html;
+                    }
+
+                    previewDiv.style.display = 'block';
+                } else {
+                    alert('Error previewing changes: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error previewing organization:', error);
+                alert('Error previewing changes. Please try again.');
+            });
+        }
+
+        // Organize project
+        function organizeProject() {
+            if (!confirm('This will move files to their proper locations and update import paths. Continue?')) {
+                return;
+            }
+
+            const btn = document.getElementById('organizeBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Organizing...';
+
+            fetch('/settings/storage/organize-project', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ dry_run: false })
+            })
+            .then(response => response.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-folder-check me-2"></i>Organize Project';
+
+                if (data.success) {
+                    alert(`Success! Organized ${data.results.moved_files.length} files.`);
+                    checkOrganizationStatus();
+                    location.reload();  // Reload to show updated status
+                } else {
+                    alert('Error organizing project: ' + data.error);
+                }
+            })
+            .catch(error => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-folder-check me-2"></i>Organize Project';
+                console.error('Error organizing project:', error);
+                alert('Error organizing project. Please try again.');
+            });
+        }
+
+        // Clean temporary files
+        function cleanTempFiles() {
+            if (!confirm('This will delete all temporary files (.tmp, temp_*.db). Continue?')) {
+                return;
+            }
+
+            fetch('/settings/storage/clean-temp', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ dry_run: false })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const results = data.results;
+                    if (results.deleted_files.length > 0) {
+                        alert(`Cleaned ${results.deleted_files.length} temporary files. Space freed: ${(results.space_freed / 1024).toFixed(2)} KB`);
+                    } else {
+                        alert('No temporary files found to clean.');
+                    }
+                    refreshStorageStats();
+                } else {
+                    alert('Error cleaning temp files: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error cleaning temp files:', error);
+                alert('Error cleaning temp files. Please try again.');
+            });
+        }
+
+        // Clean old logs
+        function cleanLogs() {
+            if (!confirm('This will remove log entries older than 7 days. Continue?')) {
+                return;
+            }
+
+            fetch('/settings/storage/clean-logs', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ dry_run: false, days: 7 })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const results = data.results;
+                    if (results.deleted_lines > 0) {
+                        alert(`Cleaned ${results.deleted_lines} old log entries. Space freed: ${(results.space_freed / 1024).toFixed(2)} KB`);
+                    } else {
+                        alert('No old log entries found to clean.');
+                    }
+                    refreshStorageStats();
+                } else {
+                    alert('Error cleaning logs: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error cleaning logs:', error);
+                alert('Error cleaning logs. Please try again.');
+            });
+        }
+
+        // Clean old backups
+        function cleanBackups() {
+            if (!confirm('This will delete old backup files, keeping only the 5 most recent. Continue?')) {
+                return;
+            }
+
+            fetch('/settings/storage/clean-backups', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ dry_run: false, keep: 5 })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const results = data.results;
+                    if (results.deleted_files.length > 0) {
+                        alert(`Cleaned ${results.deleted_files.length} old backup files. Space freed: ${(results.space_freed / (1024 * 1024)).toFixed(2)} MB\nKept files: ${results.kept_files.join(', ')}`);
+                    } else {
+                        alert('No old backup files found to clean.');
+                    }
+                    refreshStorageStats();
+                } else {
+                    alert('Error cleaning backups: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error cleaning backups:', error);
+                alert('Error cleaning backups. Please try again.');
+            });
+        }
+
+        // Vacuum database
+        function vacuumDatabase() {
+            if (!confirm('This will optimize the database. The application may be briefly unavailable. Continue?')) {
+                return;
+            }
+
+            fetch('/settings/storage/vacuum-db', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const results = data.results;
+                    const freedMB = (results.space_freed / (1024 * 1024)).toFixed(2);
+                    alert(`Database optimized successfully!\nSpace freed: ${freedMB} MB`);
+                    refreshStorageStats();
+                } else {
+                    alert('Error vacuuming database: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error vacuuming database:', error);
+                alert('Error vacuuming database. Please try again.');
+            });
+        }
+
+        // Initialize storage tab when it's activated
+        const storageTab = document.getElementById('storage-tab');
+        if (storageTab) {
+            storageTab.addEventListener('shown.bs.tab', function() {
+                refreshStorageStats();
+                checkOrganizationStatus();
+            });
+
+            // If storage tab is active on page load
+            if (storageTab.classList.contains('active')) {
+                refreshStorageStats();
+                checkOrganizationStatus();
+            }
+        }
+    });
+
+    // ============================================================================
+    // SYNC LATEST DATA FUNCTIONALITY
+    // ============================================================================
+
+    let syncCheckInterval = null;
+    let currentSyncTaskId = null;
+
+    // Start sync task
+    function startSync() {
+        const startBtn = document.getElementById('startSyncBtn');
+        const cancelBtn = document.getElementById('cancelSyncBtn');
+
+        // Disable start button
+        startBtn.disabled = true;
+        startBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Starting...';
+
+        console.log('Starting sync request...');
+
+        fetch('{{ url_for("settings.sync_latest_candles") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+            }
+        })
+        .then(response => {
+            console.log('Received response, status:', response.status);
+            // Parse JSON regardless of status code
+            return response.json().then(data => ({
+                status: response.status,
+                ok: response.ok,
+                data: data
+            }));
+        })
+        .then(result => {
+            console.log('Response data:', result.data);
+            if (result.ok && result.data.success) {
+                currentSyncTaskId = result.data.task_id;
+
+                // Hide idle status, show active status
+                document.getElementById('syncIdleStatus').style.display = 'none';
+                document.getElementById('activeSyncStatus').style.display = 'block';
+
+                // Show cancel button, hide start button
+                startBtn.style.display = 'none';
+                cancelBtn.style.display = 'inline-block';
+
+                // Start polling for status updates
+                startSyncStatusPolling();
+
+                console.log('Sync task started successfully!');
+            } else {
+                // Handle error from backend
+                const errorMsg = result.data.error || 'Unknown error occurred';
+                console.error('Sync failed:', errorMsg);
+                alert('Error starting sync: ' + errorMsg);
+                startBtn.disabled = false;
+                startBtn.innerHTML = '<i class="bi bi-arrow-repeat me-2"></i>Sync Latest Candles';
+            }
+        })
+        .catch(error => {
+            console.error('Error starting sync (exception):', error);
+            alert('Error starting sync. Please try again. ' + error.message);
+            startBtn.disabled = false;
+            startBtn.innerHTML = '<i class="bi bi-arrow-repeat me-2"></i>Sync Latest Candles';
+        });
+    }
+
+    // Cancel sync task
+    function cancelSync() {
+        if (!currentSyncTaskId) {
+            return;
+        }
+
+        if (!confirm('Are you sure you want to cancel the sync?')) {
+            return;
+        }
+
+        fetch(`{{ url_for("settings.cancel_sync", task_id=0) }}`.replace('/0', '/' + currentSyncTaskId), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('Sync cancelled successfully');
+                stopSyncStatusPolling();
+                resetSyncUI();
+            } else {
+                alert('Error cancelling sync: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error cancelling sync:', error);
+            alert('Error cancelling sync. Please try again.');
+        });
+    }
+
+    // Start polling for sync status
+    function startSyncStatusPolling() {
+        // Poll every 2 seconds
+        syncCheckInterval = setInterval(checkSyncStatus, 2000);
+        checkSyncStatus(); // Check immediately
+    }
+
+    // Stop polling for sync status
+    function stopSyncStatusPolling() {
+        if (syncCheckInterval) {
+            clearInterval(syncCheckInterval);
+            syncCheckInterval = null;
+        }
+    }
+
+    // Check sync status
+    function checkSyncStatus() {
+        console.log('Checking sync status...');
+        fetch('{{ url_for("settings.sync_status") }}', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Sync status response:', data);
+            if (data.success && data.status) {
+                console.log('Current status:', data.status.status, 'Progress:', data.status.progress_percentage + '%');
+                updateSyncUI(data.status);
+
+                // Stop polling if task is completed, failed, or cancelled
+                if (['completed', 'failed', 'cancelled'].includes(data.status.status)) {
+                    console.log('Sync finished with status:', data.status.status);
+                    stopSyncStatusPolling();
+
+                    // Show completion message
+                    if (data.status.status === 'completed') {
+                        alert(
+                            `Sync completed! Synced: ${data.status.synced_stocks}, ` +
+                            `Skipped: ${data.status.skipped_stocks}, ` +
+                            `Failed: ${data.status.failed_stocks}, ` +
+                            `New Candles Added: ${data.status.new_candles_added}`
+                        );
+                    } else if (data.status.status === 'failed') {
+                        alert('Sync failed: ' + (data.status.error_message || 'Unknown error'));
+                    }
+
+                    // Reset UI after a delay
+                    setTimeout(resetSyncUI, 3000);
+                }
+            } else {
+                console.log('No active sync task found');
+            }
+        })
+        .catch(error => {
+            console.error('Error checking sync status:', error);
+        });
+    }
+
+    // Update sync UI with status data
+    function updateSyncUI(status) {
+        console.log('Updating UI with status:', status);
+
+        // Update progress text
+        document.getElementById('syncProgressText').textContent =
+            `${status.synced_stocks} / ${status.total_stocks} stocks`;
+
+        // Update progress bar
+        const progressBar = document.getElementById('syncProgressBar');
+        const progressPercentage = document.getElementById('syncProgressPercentage');
+        progressBar.style.width = status.progress_percentage + '%';
+        progressPercentage.textContent = status.progress_percentage.toFixed(1) + '%';
+
+        // Update stats
+        document.getElementById('syncedStocksCount').textContent = status.synced_stocks;
+        document.getElementById('skippedStocksCount').textContent = status.skipped_stocks;
+        document.getElementById('failedSyncStocksCount').textContent = status.failed_stocks;
+        document.getElementById('newCandlesCount').textContent = status.new_candles_added;
+
+        // Update start time
+        if (status.started_at) {
+            const startTime = new Date(status.started_at);
+            document.getElementById('syncStartTime').textContent = startTime.toLocaleTimeString();
+        }
+
+        // Update ETA
+        if (status.eta_seconds) {
+            const minutes = Math.floor(status.eta_seconds / 60);
+            const seconds = Math.floor(status.eta_seconds % 60);
+            document.getElementById('syncEtaDisplay').textContent =
+                `${minutes}m ${seconds}s`;
+        } else {
+            document.getElementById('syncEtaDisplay').textContent = '--';
+        }
+
+        // Update status badge
+        const badge = document.getElementById('syncStatusBadge');
+        badge.textContent = status.status.charAt(0).toUpperCase() + status.status.slice(1);
+
+        // Update badge color based on status
+        badge.className = 'badge';
+        if (status.status === 'running') {
+            badge.classList.add('bg-success');
+        } else if (status.status === 'completed') {
+            badge.classList.add('bg-primary');
+        } else if (status.status === 'failed') {
+            badge.classList.add('bg-danger');
+        } else if (status.status === 'cancelled') {
+            badge.classList.add('bg-warning');
+        }
+    }
+
+    // Reset sync UI to initial state
+    function resetSyncUI() {
+        currentSyncTaskId = null;
+
+        // Hide active status, show idle status
+        document.getElementById('activeSyncStatus').style.display = 'none';
+        document.getElementById('syncIdleStatus').style.display = 'block';
+
+        // Show start button, hide cancel button
+        const startBtn = document.getElementById('startSyncBtn');
+        const cancelBtn = document.getElementById('cancelSyncBtn');
+        startBtn.style.display = 'inline-block';
+        startBtn.disabled = false;
+        startBtn.innerHTML = '<i class="bi bi-arrow-repeat me-2"></i>Sync Latest Candles';
+        cancelBtn.style.display = 'none';
+
+        // Reset all counters
+        document.getElementById('syncProgressText').textContent = '0 / 0 stocks';
+        document.getElementById('syncProgressBar').style.width = '0%';
+        document.getElementById('syncProgressPercentage').textContent = '0%';
+        document.getElementById('syncedStocksCount').textContent = '0';
+        document.getElementById('skippedStocksCount').textContent = '0';
+        document.getElementById('failedSyncStocksCount').textContent = '0';
+        document.getElementById('newCandlesCount').textContent = '0';
+        document.getElementById('syncStartTime').textContent = '--';
+        document.getElementById('syncEtaDisplay').textContent = '--';
+    }
+
+    // Check for active sync on page load if historical tab is active
+    document.addEventListener('DOMContentLoaded', function() {
+        const historicalTab = document.getElementById('historical-tab');
+        if (historicalTab && historicalTab.classList.contains('active')) {
+            checkSyncStatus();
+
+            // If there's an active sync, start polling
+            fetch('{{ url_for("settings.sync_status") }}', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.status && data.status.status === 'running') {
+                    currentSyncTaskId = data.status.id;
+                    document.getElementById('syncIdleStatus').style.display = 'none';
+                    document.getElementById('activeSyncStatus').style.display = 'block';
+                    document.getElementById('startSyncBtn').style.display = 'none';
+                    document.getElementById('cancelSyncBtn').style.display = 'inline-block';
+                    startSyncStatusPolling();
+                }
+            })
+            .catch(error => console.error('Error checking initial sync status:', error));
         }
     });
 </script>

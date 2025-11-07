@@ -1244,3 +1244,343 @@ def clear_index_data():
         current_app.logger.error(f'Error clearing index data: {str(e)}')
         flash(f'Error clearing index data: {str(e)}', 'danger')
         return redirect(url_for('settings.index', active_tab='indices'))
+
+
+# ============================================================================
+# FILES & STORAGE MANAGEMENT ROUTES
+# ============================================================================
+
+@settings_bp.route('/storage/analyze', methods=['GET'])
+@login_required
+def analyze_storage():
+    """Analyze project storage usage"""
+    try:
+        from app.storage_service import StorageService
+
+        storage = StorageService()
+        stats = storage.analyze_storage()
+
+        return jsonify({
+            'success': True,
+            'stats': stats
+        })
+
+    except Exception as e:
+        current_app.logger.error(f'Error analyzing storage: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/storage/organization-status', methods=['GET'])
+@login_required
+def get_organization_status():
+    """Get project organization status"""
+    try:
+        from app.storage_service import StorageService
+
+        storage = StorageService()
+        status = storage.check_organization_status()
+
+        return jsonify({
+            'success': True,
+            'status': status
+        })
+
+    except Exception as e:
+        current_app.logger.error(f'Error checking organization status: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/storage/organize-project', methods=['POST'])
+@login_required
+def organize_project():
+    """Organize project files into proper directories"""
+    try:
+        from app.storage_service import StorageService
+
+        data = request.get_json() or {}
+        dry_run = data.get('dry_run', False)
+
+        storage = StorageService()
+        results = storage.organize_project(dry_run=dry_run)
+
+        if results['success']:
+            if not dry_run:
+                flash(f'Successfully organized project: {len(results["moved_files"])} files moved', 'success')
+            return jsonify({
+                'success': True,
+                'results': results
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': results['message'],
+                'results': results
+            }), 400
+
+    except Exception as e:
+        current_app.logger.error(f'Error organizing project: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/storage/clean-temp', methods=['POST'])
+@login_required
+def clean_temp_files():
+    """Clean temporary files"""
+    try:
+        from app.storage_service import StorageService
+
+        data = request.get_json() or {}
+        dry_run = data.get('dry_run', False)
+
+        storage = StorageService()
+        results = storage.clean_temp_files(dry_run=dry_run)
+
+        if results['success']:
+            if not dry_run and len(results['deleted_files']) > 0:
+                flash(f'Cleaned {len(results["deleted_files"])} temporary files', 'success')
+            return jsonify({
+                'success': True,
+                'results': results
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to clean temp files',
+                'results': results
+            }), 400
+
+    except Exception as e:
+        current_app.logger.error(f'Error cleaning temp files: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/storage/clean-logs', methods=['POST'])
+@login_required
+def clean_old_logs():
+    """Clean or archive old log files"""
+    try:
+        from app.storage_service import StorageService
+
+        data = request.get_json() or {}
+        dry_run = data.get('dry_run', False)
+        days_to_keep = data.get('days', 7)
+
+        storage = StorageService()
+        results = storage.clean_old_logs(days_to_keep=days_to_keep, dry_run=dry_run)
+
+        if results['success']:
+            if not dry_run and results['deleted_lines'] > 0:
+                flash(f'Cleaned {results["deleted_lines"]} old log entries', 'success')
+            return jsonify({
+                'success': True,
+                'results': results
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to clean logs',
+                'results': results
+            }), 400
+
+    except Exception as e:
+        current_app.logger.error(f'Error cleaning logs: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/storage/clean-backups', methods=['POST'])
+@login_required
+def clean_old_backups():
+    """Clean old backup files"""
+    try:
+        from app.storage_service import StorageService
+
+        data = request.get_json() or {}
+        dry_run = data.get('dry_run', False)
+        keep_count = data.get('keep', 5)
+
+        storage = StorageService()
+        results = storage.clean_old_backups(keep_count=keep_count, dry_run=dry_run)
+
+        if results['success']:
+            if not dry_run and len(results['deleted_files']) > 0:
+                flash(f'Cleaned {len(results["deleted_files"])} old backup files', 'success')
+            return jsonify({
+                'success': True,
+                'results': results
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to clean backups',
+                'results': results
+            }), 400
+
+    except Exception as e:
+        current_app.logger.error(f'Error cleaning backups: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/storage/vacuum-db', methods=['POST'])
+@login_required
+def vacuum_database():
+    """Vacuum SQLite database to reclaim space"""
+    try:
+        from app.storage_service import StorageService
+
+        storage = StorageService()
+        results = storage.vacuum_database()
+
+        if results['success']:
+            space_freed_mb = results['space_freed'] / (1024 * 1024)
+            flash(f'Database optimized. Space freed: {space_freed_mb:.2f} MB', 'success')
+            return jsonify({
+                'success': True,
+                'results': results
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': results.get('errors', ['Unknown error'])[0],
+                'results': results
+            }), 400
+
+    except Exception as e:
+        current_app.logger.error(f'Error vacuuming database: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ============================================================================
+# HISTORICAL DATA SYNC ROUTES
+# ============================================================================
+
+@settings_bp.route('/historical-data/sync-latest', methods=['POST'])
+@login_required
+def sync_latest_candles():
+    """Sync latest candlestick data for all stocks from Kite API"""
+    try:
+        from app.sync_service import start_sync_task
+
+        # Check if user has Kite connection
+        if not current_user.kite_connected or not current_user.kite_access_token:
+            return jsonify({
+                'success': False,
+                'error': 'Please connect to Zerodha Kite first before syncing data.'
+            }), 400
+
+        # Verify Kite token is valid
+        if not current_user.is_kite_token_valid():
+            return jsonify({
+                'success': False,
+                'error': 'Your Kite access token has expired. Please reconnect to Kite.'
+            }), 400
+
+        # Start sync task
+        success, message, task_id = start_sync_task(
+            current_user.id,
+            current_app._get_current_object()
+        )
+
+        if success:
+            return jsonify({
+                'success': True,
+                'message': message,
+                'task_id': task_id
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': message
+            }), 400
+
+    except Exception as e:
+        current_app.logger.error(f'Error starting sync task: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/historical-data/sync-status', methods=['GET'])
+@login_required
+def sync_status():
+    """Get status of current sync task"""
+    try:
+        from app.sync_service import get_sync_status
+
+        status = get_sync_status(current_user.id)
+
+        return jsonify({
+            'success': True,
+            'status': status
+        })
+
+    except Exception as e:
+        current_app.logger.error(f'Error getting sync status: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/historical-data/cancel-sync/<int:task_id>', methods=['POST'])
+@login_required
+def cancel_sync(task_id):
+    """Cancel a running sync task"""
+    try:
+        from app.sync_service import cancel_sync_task
+        from app.models import SyncTask
+
+        # Verify task belongs to current user
+        task = SyncTask.query.get(task_id)
+        if not task:
+            return jsonify({
+                'success': False,
+                'error': 'Task not found'
+            }), 404
+
+        if task.user_id != current_user.id:
+            return jsonify({
+                'success': False,
+                'error': 'Unauthorized'
+            }), 403
+
+        success, message = cancel_sync_task(task_id)
+
+        if success:
+            return jsonify({
+                'success': True,
+                'message': message
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': message
+            }), 400
+
+    except Exception as e:
+        current_app.logger.error(f'Error cancelling sync task: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
