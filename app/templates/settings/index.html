@@ -1339,7 +1339,7 @@
                         </div>
 
                         <!-- Requirements -->
-                        <div class="card">
+                        <div class="card mb-4">
                             <div class="card-header">
                                 <h6 class="mb-0">
                                     <i class="bi bi-exclamation-triangle me-2"></i>Requirements
@@ -1350,6 +1350,115 @@
                                     <li>At least 150 days of historical index data for each sector/subsector</li>
                                     <li>Index symbols configured for sectors and subsectors</li>
                                     <li>Historical indices generated (Index Management tab)</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- Stock Stage Analysis Control Panel -->
+                        <div class="card mb-4">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="mb-0">
+                                    <i class="bi bi-graph-up me-2"></i>Stock Stage Analysis
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <p class="mb-3">Analyze individual stocks to determine their current Weinstein stage using historical price data.</p>
+
+                                <div id="stockStageAnalysisIdleStatus">
+                                    <div class="mb-3">
+                                        <label for="stockFilterType" class="form-label fw-bold">Select Stocks to Analyze</label>
+                                        <select class="form-select" id="stockFilterType" onchange="updateStockFilterOptions()">
+                                            <option value="nifty500" selected>NIFTY 500 Stocks Only</option>
+                                            <option value="all">All Stocks</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="d-grid">
+                                        <button id="startStockStageAnalysisBtn" class="btn btn-success" onclick="startStockStageAnalysis()">
+                                            <i class="bi bi-play-circle me-2"></i>Run Stock Stage Analysis
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div id="activeStockStageAnalysisStatus" style="display: none;">
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Progress</label>
+                                        <div class="progress" style="height: 25px;">
+                                            <div id="stockStageAnalysisProgressBar"
+                                                 class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+                                                 role="progressbar"
+                                                 style="width: 0%">
+                                                0%
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-3">
+                                            <div class="card bg-success text-white">
+                                                <div class="card-body text-center">
+                                                    <h4 class="mb-0" id="stockAnalyzedCount">0</h4>
+                                                    <small>Analyzed</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="card bg-warning text-dark">
+                                                <div class="card-body text-center">
+                                                    <h4 class="mb-0" id="stockSkippedCount">0</h4>
+                                                    <small>Skipped</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="card bg-danger text-white">
+                                                <div class="card-body text-center">
+                                                    <h4 class="mb-0" id="stockFailedCount">0</h4>
+                                                    <small>Failed</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="card bg-secondary text-white">
+                                                <div class="card-body text-center">
+                                                    <h5 class="mb-0" id="stockEtaDisplay">--</h5>
+                                                    <small>ETA</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <small class="text-muted">
+                                            <i class="bi bi-clock me-1"></i>Current: <span id="stockCurrentSymbol">--</span>
+                                            | Total: <span id="stockTotalCount">0</span>
+                                        </small>
+                                    </div>
+
+                                    <div class="d-grid">
+                                        <button id="cancelStockStageAnalysisBtn"
+                                                class="btn btn-danger"
+                                                onclick="cancelStockStageAnalysis()"
+                                                style="display: none;">
+                                            <i class="bi bi-x-circle me-2"></i>Cancel Stock Analysis
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Stock Stage Analysis Requirements -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0">
+                                    <i class="bi bi-exclamation-triangle me-2"></i>Stock Analysis Requirements
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <ul class="mb-0">
+                                    <li>At least 150 days of historical price data for each stock</li>
+                                    <li>Daily candlestick data downloaded from Historical Data tab</li>
+                                    <li>Stocks without sufficient data will be skipped</li>
                                 </ul>
                             </div>
                         </div>
@@ -3196,6 +3305,220 @@
                     }
                 })
                 .catch(error => console.error('Error checking initial stage analysis status:', error));
+        }
+    });
+
+    // ==================== Stock Stage Analysis Functions ====================
+
+    let stockStageAnalysisTaskId = null;
+    let stockStageAnalysisStatusInterval = null;
+
+    function updateStockFilterOptions() {
+        // Reserved for future sector/subsector filter implementation
+        console.log('Filter updated:', document.getElementById('stockFilterType').value);
+    }
+
+    function startStockStageAnalysis() {
+        const startBtn = document.getElementById('startStockStageAnalysisBtn');
+        startBtn.disabled = true;
+        startBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Starting...';
+
+        const filterType = document.getElementById('stockFilterType').value;
+
+        fetch('{{ url_for("settings.run_stock_stage_analysis") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                filter_type: filterType
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                stockStageAnalysisTaskId = data.task_id;
+
+                // Hide idle status, show active status
+                document.getElementById('stockStageAnalysisIdleStatus').style.display = 'none';
+                document.getElementById('activeStockStageAnalysisStatus').style.display = 'block';
+                document.getElementById('cancelStockStageAnalysisBtn').style.display = 'block';
+
+                // Start polling for status
+                startStockStageAnalysisStatusPolling();
+            } else {
+                alert('Error: ' + (data.error || 'Failed to start stock stage analysis'));
+                startBtn.disabled = false;
+                startBtn.innerHTML = '<i class="bi bi-play-circle me-2"></i>Run Stock Stage Analysis';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to start stock stage analysis: ' + error.message);
+            startBtn.disabled = false;
+            startBtn.innerHTML = '<i class="bi bi-play-circle me-2"></i>Run Stock Stage Analysis';
+        });
+    }
+
+    function checkStockStageAnalysisStatus(showCompletionAlert = false) {
+        fetch('{{ url_for("settings.stock_stage_analysis_status") }}')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.status) {
+                    updateStockStageAnalysisUI(data.status, showCompletionAlert);
+                }
+            })
+            .catch(error => console.error('Error checking stock stage analysis status:', error));
+    }
+
+    function updateStockStageAnalysisUI(status, showCompletionAlert = false) {
+        if (!status) return;
+
+        // Update progress bar
+        const progressBar = document.getElementById('stockStageAnalysisProgressBar');
+        progressBar.style.width = status.progress_percentage + '%';
+        progressBar.textContent = status.progress_percentage.toFixed(1) + '%';
+
+        // Update counts
+        document.getElementById('stockAnalyzedCount').textContent = status.analyzed_stocks || 0;
+        document.getElementById('stockSkippedCount').textContent = status.skipped_stocks || 0;
+        document.getElementById('stockFailedCount').textContent = status.failed_stocks || 0;
+        document.getElementById('stockTotalCount').textContent = status.total_stocks || 0;
+        document.getElementById('stockCurrentSymbol').textContent = status.current_stock_symbol || '--';
+
+        // Update ETA
+        if (status.eta_seconds) {
+            const minutes = Math.floor(status.eta_seconds / 60);
+            const seconds = status.eta_seconds % 60;
+            document.getElementById('stockEtaDisplay').textContent = `${minutes}m ${seconds}s`;
+        } else {
+            document.getElementById('stockEtaDisplay').textContent = '--';
+        }
+
+        // Handle terminal states
+        if (['completed', 'failed', 'cancelled'].includes(status.status)) {
+            stopStockStageAnalysisStatusPolling();
+
+            // Remove animation from progress bar
+            progressBar.classList.remove('progress-bar-animated');
+
+            // Change progress bar color based on status
+            if (status.status === 'completed') {
+                progressBar.classList.remove('bg-danger');
+                progressBar.classList.add('bg-success');
+
+                // Show completion message only if explicitly requested (during active polling)
+                if (showCompletionAlert) {
+                    alert(`Stock stage analysis completed!\n\nAnalyzed: ${status.analyzed_stocks}\nSkipped: ${status.skipped_stocks}\nFailed: ${status.failed_stocks}`);
+                }
+            } else if (status.status === 'failed') {
+                progressBar.classList.remove('bg-success');
+                progressBar.classList.add('bg-danger');
+                if (showCompletionAlert) {
+                    alert('Stock stage analysis failed: ' + (status.error_message || 'Unknown error'));
+                }
+            } else if (status.status === 'cancelled') {
+                progressBar.classList.remove('bg-success', 'bg-danger');
+                if (showCompletionAlert) {
+                    alert('Stock stage analysis was cancelled');
+                }
+            }
+
+            // Reset UI after a delay
+            setTimeout(resetStockStageAnalysisUI, 3000);
+        }
+    }
+
+    function cancelStockStageAnalysis() {
+        if (!stockStageAnalysisTaskId) return;
+
+        if (!confirm('Are you sure you want to cancel the stock stage analysis?')) {
+            return;
+        }
+
+        fetch(`/settings/stock-stage-analysis/cancel/${stockStageAnalysisTaskId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Stock stage analysis cancelled successfully');
+            } else {
+                alert('Error: ' + (data.error || 'Failed to cancel'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to cancel stock stage analysis: ' + error.message);
+        });
+    }
+
+    function startStockStageAnalysisStatusPolling() {
+        if (stockStageAnalysisStatusInterval) {
+            clearInterval(stockStageAnalysisStatusInterval);
+        }
+
+        stockStageAnalysisStatusInterval = setInterval(() => checkStockStageAnalysisStatus(true), 2000);
+
+        // Check immediately with alerts enabled
+        checkStockStageAnalysisStatus(true);
+    }
+
+    function stopStockStageAnalysisStatusPolling() {
+        if (stockStageAnalysisStatusInterval) {
+            clearInterval(stockStageAnalysisStatusInterval);
+            stockStageAnalysisStatusInterval = null;
+        }
+    }
+
+    function resetStockStageAnalysisUI() {
+        // Reset progress bar
+        const progressBar = document.getElementById('stockStageAnalysisProgressBar');
+        progressBar.style.width = '0%';
+        progressBar.textContent = '0%';
+        progressBar.classList.remove('bg-success', 'bg-danger');
+        progressBar.classList.add('progress-bar-animated');
+
+        // Reset counts
+        document.getElementById('stockAnalyzedCount').textContent = '0';
+        document.getElementById('stockSkippedCount').textContent = '0';
+        document.getElementById('stockFailedCount').textContent = '0';
+        document.getElementById('stockTotalCount').textContent = '0';
+        document.getElementById('stockCurrentSymbol').textContent = '--';
+        document.getElementById('stockEtaDisplay').textContent = '--';
+
+        // Reset buttons
+        const startBtn = document.getElementById('startStockStageAnalysisBtn');
+        startBtn.disabled = false;
+        startBtn.innerHTML = '<i class="bi bi-play-circle me-2"></i>Run Stock Stage Analysis';
+
+        // Show idle status, hide active status
+        document.getElementById('stockStageAnalysisIdleStatus').style.display = 'block';
+        document.getElementById('activeStockStageAnalysisStatus').style.display = 'none';
+
+        stockStageAnalysisTaskId = null;
+    }
+
+    // Check for active stock stage analysis on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        const stageAnalysisTab = document.getElementById('stage-analysis-tab');
+        if (stageAnalysisTab && stageAnalysisTab.classList.contains('active')) {
+            // Check if there's an active stock stage analysis task
+            fetch('{{ url_for("settings.stock_stage_analysis_status") }}')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.status && data.status.status === 'running') {
+                        stockStageAnalysisTaskId = data.status.id;
+                        document.getElementById('stockStageAnalysisIdleStatus').style.display = 'none';
+                        document.getElementById('activeStockStageAnalysisStatus').style.display = 'block';
+                        document.getElementById('cancelStockStageAnalysisBtn').style.display = 'block';
+                        startStockStageAnalysisStatusPolling();
+                    }
+                })
+                .catch(error => console.error('Error checking initial stock stage analysis status:', error));
         }
     });
 </script>
