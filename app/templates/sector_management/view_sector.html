@@ -161,6 +161,7 @@
                         <th class="text-center">Index Value</th>
                         <th class="text-center">Change</th>
                         <th class="text-center">Stocks</th>
+                        <th class="text-center">Stage</th>
                         <th class="text-center">Status</th>
                         <th class="text-end">Actions</th>
                     </tr>
@@ -205,6 +206,29 @@
                             <span class="badge {% if item.stock_count > 0 %}bg-success{% else %}bg-secondary{% endif %}">
                                 {{ item.stock_count }}
                             </span>
+                        </td>
+                        <td class="text-center">
+                            {% if item.subsector.current_stage %}
+                                {% if item.subsector.current_stage == 1 %}
+                                    <span class="badge bg-primary" title="Accumulation">
+                                        <i class="bi bi-circle"></i> Stage 1
+                                    </span>
+                                {% elif item.subsector.current_stage == 2 %}
+                                    <span class="badge bg-success" title="Markup">
+                                        <i class="bi bi-arrow-up-circle"></i> Stage 2
+                                    </span>
+                                {% elif item.subsector.current_stage == 3 %}
+                                    <span class="badge bg-warning text-dark" title="Distribution">
+                                        <i class="bi bi-dash-circle"></i> Stage 3
+                                    </span>
+                                {% elif item.subsector.current_stage == 4 %}
+                                    <span class="badge bg-danger" title="Decline">
+                                        <i class="bi bi-arrow-down-circle"></i> Stage 4
+                                    </span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">--</span>
+                            {% endif %}
                         </td>
                         <td class="text-center">
                             {% if item.subsector.is_active %}
