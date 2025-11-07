@@ -86,6 +86,16 @@
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
+                        <button class="nav-link {{ 'active' if active_tab == 'stage-analysis' else '' }}"
+                                id="stage-analysis-tab"
+                                data-bs-toggle="tab"
+                                data-bs-target="#stage-analysis"
+                                type="button"
+                                role="tab">
+                            <i class="bi bi-bar-chart-steps me-2"></i>Stage Analysis
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
                         <button class="nav-link {{ 'active' if active_tab == 'about' else '' }}"
                                 id="about-tab"
                                 data-bs-toggle="tab"
@@ -1220,6 +1230,127 @@
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stage Analysis Tab -->
+                    <div class="tab-pane fade {{ 'show active' if active_tab == 'stage-analysis' else '' }}"
+                         id="stage-analysis"
+                         role="tabpanel">
+                        <h4 class="mb-3">Stage Analysis (Weinstein Methodology)</h4>
+
+                        <!-- Info Section -->
+                        <div class="alert alert-info mb-4">
+                            <h6 class="alert-heading">
+                                <i class="bi bi-info-circle me-2"></i>What is Stage Analysis?
+                            </h6>
+                            <p class="mb-2">Stage Analysis is a systematic method developed by Stan Weinstein to identify the current trend stage of a market index or sector:</p>
+                            <ul class="mb-0">
+                                <li><strong>Stage 1 (Accumulation):</strong> Basing pattern, preparing for uptrend</li>
+                                <li><strong>Stage 2 (Markup):</strong> Strong uptrend, advancing</li>
+                                <li><strong>Stage 3 (Distribution):</strong> Topping pattern, preparing for downtrend</li>
+                                <li><strong>Stage 4 (Decline):</strong> Downtrend, declining</li>
+                            </ul>
+                        </div>
+
+                        <!-- Stage Analysis Control Panel -->
+                        <div class="card mb-4">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="mb-0">
+                                    <i class="bi bi-bar-chart-steps me-2"></i>Run Stage Analysis
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <p class="mb-3">Analyze all sectors and subsectors using 30-day and 150-day moving averages to determine their current Weinstein stage.</p>
+
+                                <div id="stageAnalysisIdleStatus">
+                                    <div class="d-grid">
+                                        <button id="startStageAnalysisBtn" class="btn btn-primary" onclick="startStageAnalysis()">
+                                            <i class="bi bi-play-circle me-2"></i>Run Stage Analysis
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div id="activeStageAnalysisStatus" style="display: none;">
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Progress</label>
+                                        <div class="progress" style="height: 25px;">
+                                            <div id="stageAnalysisProgressBar"
+                                                 class="progress-bar progress-bar-striped progress-bar-animated"
+                                                 role="progressbar"
+                                                 style="width: 0%">
+                                                0%
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-3">
+                                            <div class="card bg-success text-white">
+                                                <div class="card-body text-center">
+                                                    <h4 class="mb-0" id="stageAnalyzedCount">0</h4>
+                                                    <small>Analyzed</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="card bg-danger text-white">
+                                                <div class="card-body text-center">
+                                                    <h4 class="mb-0" id="stageFailedCount">0</h4>
+                                                    <small>Failed</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="card bg-info text-white">
+                                                <div class="card-body text-center">
+                                                    <h4 class="mb-0" id="stageTotalCount">0</h4>
+                                                    <small>Total</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="card bg-secondary text-white">
+                                                <div class="card-body text-center">
+                                                    <h5 class="mb-0" id="stageEtaDisplay">--</h5>
+                                                    <small>ETA</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <small class="text-muted">
+                                            <i class="bi bi-clock me-1"></i>Current: <span id="stageCurrentSymbol">--</span>
+                                        </small>
+                                    </div>
+
+                                    <div class="d-grid">
+                                        <button id="cancelStageAnalysisBtn"
+                                                class="btn btn-danger"
+                                                onclick="cancelStageAnalysis()"
+                                                style="display: none;">
+                                            <i class="bi bi-x-circle me-2"></i>Cancel Analysis
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Requirements -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0">
+                                    <i class="bi bi-exclamation-triangle me-2"></i>Requirements
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <ul class="mb-0">
+                                    <li>At least 150 days of historical index data for each sector/subsector</li>
+                                    <li>Index symbols configured for sectors and subsectors</li>
+                                    <li>Historical indices generated (Index Management tab)</li>
+                                </ul>
                             </div>
                         </div>
                     </div>
@@ -2823,6 +2954,246 @@
                 }
             })
             .catch(error => console.error('Error checking initial sync status:', error));
+        }
+    });
+
+    // ========================================================================
+    // STAGE ANALYSIS FUNCTIONALITY
+    // ========================================================================
+
+    let stageAnalysisTaskId = null;
+    let stageAnalysisStatusInterval = null;
+
+    function startStageAnalysis() {
+        const startBtn = document.getElementById('startStageAnalysisBtn');
+
+        startBtn.disabled = true;
+        startBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Starting...';
+
+        console.log('Starting stage analysis...');
+
+        fetch('{{ url_for("settings.run_stage_analysis") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+            }
+        })
+        .then(response => {
+            console.log('Received response, status:', response.status);
+            return response.json().then(data => ({
+                status: response.status,
+                ok: response.ok,
+                data: data
+            }));
+        })
+        .then(result => {
+            console.log('Response data:', result.data);
+            if (result.ok && result.data.success) {
+                stageAnalysisTaskId = result.data.task_id;
+
+                // Hide idle status, show active status
+                document.getElementById('stageAnalysisIdleStatus').style.display = 'none';
+                document.getElementById('activeStageAnalysisStatus').style.display = 'block';
+
+                // Show cancel button
+                document.getElementById('cancelStageAnalysisBtn').style.display = 'block';
+
+                // Start polling for status updates
+                startStageAnalysisStatusPolling();
+
+                console.log('Stage analysis started successfully!');
+            } else {
+                const errorMsg = result.data.error || 'Unknown error occurred';
+                console.error('Stage analysis failed:', errorMsg);
+                alert('Error starting stage analysis: ' + errorMsg);
+                startBtn.disabled = false;
+                startBtn.innerHTML = '<i class="bi bi-play-circle me-2"></i>Run Stage Analysis';
+            }
+        })
+        .catch(error => {
+            console.error('Error starting stage analysis (exception):', error);
+            alert('Error starting stage analysis. Please try again. ' + error.message);
+            startBtn.disabled = false;
+            startBtn.innerHTML = '<i class="bi bi-play-circle me-2"></i>Run Stage Analysis';
+        });
+    }
+
+    function cancelStageAnalysis() {
+        if (!stageAnalysisTaskId) {
+            return;
+        }
+
+        if (!confirm('Are you sure you want to cancel the stage analysis?')) {
+            return;
+        }
+
+        fetch(`{{ url_for("settings.cancel_stage_analysis", task_id=0) }}`.replace('/0', `/${stageAnalysisTaskId}`), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('Stage analysis cancelled successfully');
+                stopStageAnalysisStatusPolling();
+                resetStageAnalysisUI();
+            } else {
+                alert('Error cancelling stage analysis: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error cancelling stage analysis:', error);
+            alert('Error cancelling stage analysis. Please try again.');
+        });
+    }
+
+    function checkStageAnalysisStatus() {
+        console.log('Checking stage analysis status...');
+
+        fetch('{{ url_for("settings.stage_analysis_status") }}')
+            .then(response => response.json())
+            .then(data => {
+                console.log('Stage analysis status response:', data);
+                if (data.success && data.status) {
+                    updateStageAnalysisUI(data.status);
+                }
+            })
+            .catch(error => {
+                console.error('Error checking stage analysis status:', error);
+            });
+    }
+
+    function updateStageAnalysisUI(status) {
+        console.log('Updating stage analysis UI with status:', status);
+
+        const progressBar = document.getElementById('stageAnalysisProgressBar');
+        const percentage = Math.round(status.progress_percentage || 0);
+
+        progressBar.style.width = percentage + '%';
+        progressBar.textContent = percentage + '%';
+
+        document.getElementById('stageAnalyzedCount').textContent = status.analyzed_symbols || 0;
+        document.getElementById('stageFailedCount').textContent = status.failed_symbols || 0;
+        document.getElementById('stageTotalCount').textContent = status.total_symbols || 0;
+        document.getElementById('stageCurrentSymbol').textContent = status.current_symbol || '--';
+
+        // Update ETA
+        if (status.eta_seconds && status.eta_seconds > 0) {
+            const minutes = Math.floor(status.eta_seconds / 60);
+            const seconds = status.eta_seconds % 60;
+            document.getElementById('stageEtaDisplay').textContent = `${minutes}m ${seconds}s`;
+        } else {
+            document.getElementById('stageEtaDisplay').textContent = '--';
+        }
+
+        // Handle completion
+        if (status.status === 'completed') {
+            console.log('Stage analysis completed!');
+            stopStageAnalysisStatusPolling();
+
+            progressBar.classList.remove('progress-bar-animated');
+            progressBar.classList.add('bg-success');
+
+            document.getElementById('cancelStageAnalysisBtn').style.display = 'none';
+
+            // Show completion message
+            alert(`Stage analysis completed!\n\nAnalyzed: ${status.analyzed_symbols}\nFailed: ${status.failed_symbols}`);
+
+            // Reset UI after 3 seconds
+            setTimeout(() => {
+                resetStageAnalysisUI();
+                // Reload page to show updated stages
+                window.location.reload();
+            }, 3000);
+        } else if (status.status === 'failed') {
+            console.error('Stage analysis failed:', status.error_message);
+            stopStageAnalysisStatusPolling();
+
+            progressBar.classList.remove('progress-bar-animated');
+            progressBar.classList.add('bg-danger');
+
+            document.getElementById('cancelStageAnalysisBtn').style.display = 'none';
+
+            alert('Stage analysis failed: ' + (status.error_message || 'Unknown error'));
+
+            setTimeout(() => resetStageAnalysisUI(), 3000);
+        } else if (status.status === 'cancelled') {
+            console.log('Stage analysis was cancelled');
+            stopStageAnalysisStatusPolling();
+            resetStageAnalysisUI();
+        }
+    }
+
+    function startStageAnalysisStatusPolling() {
+        // Clear any existing interval
+        if (stageAnalysisStatusInterval) {
+            clearInterval(stageAnalysisStatusInterval);
+        }
+
+        // Start polling every 2 seconds
+        stageAnalysisStatusInterval = setInterval(checkStageAnalysisStatus, 2000);
+
+        // Check immediately
+        checkStageAnalysisStatus();
+    }
+
+    function stopStageAnalysisStatusPolling() {
+        if (stageAnalysisStatusInterval) {
+            clearInterval(stageAnalysisStatusInterval);
+            stageAnalysisStatusInterval = null;
+        }
+    }
+
+    function resetStageAnalysisUI() {
+        // Reset progress bar
+        const progressBar = document.getElementById('stageAnalysisProgressBar');
+        progressBar.style.width = '0%';
+        progressBar.textContent = '0%';
+        progressBar.classList.remove('bg-success', 'bg-danger');
+        progressBar.classList.add('progress-bar-animated');
+
+        // Reset counts
+        document.getElementById('stageAnalyzedCount').textContent = '0';
+        document.getElementById('stageFailedCount').textContent = '0';
+        document.getElementById('stageTotalCount').textContent = '0';
+        document.getElementById('stageCurrentSymbol').textContent = '--';
+        document.getElementById('stageEtaDisplay').textContent = '--';
+
+        // Reset buttons
+        const startBtn = document.getElementById('startStageAnalysisBtn');
+        startBtn.disabled = false;
+        startBtn.innerHTML = '<i class="bi bi-play-circle me-2"></i>Run Stage Analysis';
+
+        // Show idle status, hide active status
+        document.getElementById('stageAnalysisIdleStatus').style.display = 'block';
+        document.getElementById('activeStageAnalysisStatus').style.display = 'none';
+
+        stageAnalysisTaskId = null;
+    }
+
+    // Check for active stage analysis on page load if stage-analysis tab is active
+    document.addEventListener('DOMContentLoaded', function() {
+        const stageAnalysisTab = document.getElementById('stage-analysis-tab');
+        if (stageAnalysisTab && stageAnalysisTab.classList.contains('active')) {
+            checkStageAnalysisStatus();
+
+            // If there's an active/running task, show the progress UI
+            fetch('{{ url_for("settings.stage_analysis_status") }}')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.status && data.status.status === 'running') {
+                        stageAnalysisTaskId = data.status.id;
+                        document.getElementById('stageAnalysisIdleStatus').style.display = 'none';
+                        document.getElementById('activeStageAnalysisStatus').style.display = 'block';
+                        document.getElementById('cancelStageAnalysisBtn').style.display = 'block';
+                        startStageAnalysisStatusPolling();
+                    }
+                })
+                .catch(error => console.error('Error checking initial stage analysis status:', error));
         }
     });
 </script>

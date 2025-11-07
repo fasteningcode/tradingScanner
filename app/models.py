@@ -81,6 +81,12 @@ class Sector(db.Model):
     color = db.Column(db.String(20), nullable=True)  # Color for visualization
     is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
     display_order = db.Column(db.Integer, default=0, nullable=False)
+
+    # Stage Analysis fields
+    current_stage = db.Column(db.Integer, nullable=True, index=True)  # 1-4 (Weinstein stages)
+    stage_updated_at = db.Column(db.DateTime, nullable=True)  # When stage was last calculated
+    stage_confidence = db.Column(db.Float, nullable=True)  # 0-100 confidence score
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -101,6 +107,9 @@ class Sector(db.Model):
             'color': self.color,
             'is_active': self.is_active,
             'display_order': self.display_order,
+            'current_stage': self.current_stage,
+            'stage_updated_at': self.stage_updated_at.isoformat() if self.stage_updated_at else None,
+            'stage_confidence': self.stage_confidence,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'sub_sectors_count': self.sub_sectors.count()
@@ -119,6 +128,12 @@ class SubSector(db.Model):
     description = db.Column(db.Text, nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
     display_order = db.Column(db.Integer, default=0, nullable=False)
+
+    # Stage Analysis fields
+    current_stage = db.Column(db.Integer, nullable=True, index=True)  # 1-4 (Weinstein stages)
+    stage_updated_at = db.Column(db.DateTime, nullable=True)  # When stage was last calculated
+    stage_confidence = db.Column(db.Float, nullable=True)  # 0-100 confidence score
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -144,6 +159,9 @@ class SubSector(db.Model):
             'description': self.description,
             'is_active': self.is_active,
             'display_order': self.display_order,
+            'current_stage': self.current_stage,
+            'stage_updated_at': self.stage_updated_at.isoformat() if self.stage_updated_at else None,
+            'stage_confidence': self.stage_confidence,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'instruments_count': self.instruments.filter_by(is_nifty500=True).count()
@@ -881,6 +899,100 @@ class MarketCapFetchTask(db.Model):
             'started_at': self.started_at.isoformat() if self.started_at else None,
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
             'error_message': self.error_message
+        }
+
+
+class StageAnalysisTask(db.Model):
+    """Model for tracking stage analysis tasks"""
+
+    __tablename__ = 'stage_analysis_tasks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+
+    # Progress tracking
+    status = db.Column(db.String(20), default='pending', nullable=False, index=True)  # 'pending', 'running', 'completed', 'failed', 'cancelled'
+    progress_percentage = db.Column(db.Float, default=0.0)
+    total_symbols = db.Column(db.Integer, default=0)  # Total sectors + subsectors
+    analyzed_symbols = db.Column(db.Integer, default=0)
+    failed_symbols = db.Column(db.Integer, default=0)
+    current_symbol = db.Column(db.String(50), nullable=True)
+
+    # Timestamps
+    started_at = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Error handling
+    error_message = db.Column(db.Text, nullable=True)
+
+    # Relationships
+    user = db.relationship('User', backref=db.backref('stage_analysis_tasks', lazy='dynamic', cascade='all, delete-orphan'))
+
+    def __repr__(self):
+        return f'<StageAnalysisTask {self.id} User:{self.user_id} Status:{self.status}>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        # Calculate ETA if running
+        eta_seconds = None
+        if self.status == 'running' and self.analyzed_symbols > 0 and self.started_at:
+            elapsed = (datetime.utcnow() - self.started_at).total_seconds()
+            avg_time_per_symbol = elapsed / self.analyzed_symbols
+            remaining_symbols = self.total_symbols - self.analyzed_symbols
+            eta_seconds = int(avg_time_per_symbol * remaining_symbols)
+
+        return {
+            'id': self.id,
+            'status': self.status,
+            'progress_percentage': round(self.progress_percentage, 2),
+            'total_symbols': self.total_symbols,
+            'analyzed_symbols': self.analyzed_symbols,
+            'failed_symbols': self.failed_symbols,
+            'current_symbol': self.current_symbol,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'error_message': self.error_message,
+            'eta_seconds': eta_seconds
+        }
+
+
+class StageAnalysisHistory(db.Model):
+    """Model for storing historical stage analysis results"""
+
+    __tablename__ = 'stage_analysis_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+    index_symbol = db.Column(db.String(10), nullable=False, index=True)
+    date = db.Column(db.Date, nullable=False, index=True)
+    stage = db.Column(db.Integer, nullable=False)  # 1-4
+    stage_confidence = db.Column(db.Float, nullable=True)  # 0-100
+    moving_avg_30 = db.Column(db.Float, nullable=True)
+    moving_avg_150 = db.Column(db.Float, nullable=True)
+    current_price = db.Column(db.Float, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Unique constraint: one stage analysis per symbol per date
+    __table_args__ = (
+        db.UniqueConstraint('index_symbol', 'date', name='uq_stage_symbol_date'),
+        db.Index('idx_stage_lookup', 'index_symbol', 'date'),
+    )
+
+    def __repr__(self):
+        return f'<StageAnalysisHistory {self.index_symbol} {self.date} Stage:{self.stage}>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'index_symbol': self.index_symbol,
+            'date': self.date.isoformat() if self.date else None,
+            'stage': self.stage,
+            'stage_confidence': self.stage_confidence,
+            'moving_avg_30': self.moving_avg_30,
+            'moving_avg_150': self.moving_avg_150,
+            'current_price': self.current_price,
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
 

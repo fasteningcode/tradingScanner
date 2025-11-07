@@ -62,11 +62,41 @@
                         </div>
                     </div>
                     <div class="col-md-6 text-center">
-                        <h6 class="text-muted mb-2">Index Details</h6>
-                        <p class="mb-1">Free-Float Market Cap Weighted</p>
-                        <small class="text-muted">Base: 1000 (Jul 1, 2025)</small>
+                        <h6 class="text-muted mb-2">Stage Analysis</h6>
+                        {% if sector.current_stage %}
+                            {% if sector.current_stage == 1 %}
+                                <span class="badge bg-primary px-4 py-3 fs-5">
+                                    <i class="bi bi-circle me-2"></i>Stage 1: Accumulation
+                                </span>
+                                <p class="mt-2 mb-1 small">Basing pattern, preparing for uptrend</p>
+                            {% elif sector.current_stage == 2 %}
+                                <span class="badge bg-success px-4 py-3 fs-5">
+                                    <i class="bi bi-arrow-up-circle me-2"></i>Stage 2: Markup
+                                </span>
+                                <p class="mt-2 mb-1 small">Strong uptrend, advancing</p>
+                            {% elif sector.current_stage == 3 %}
+                                <span class="badge bg-warning text-dark px-4 py-3 fs-5">
+                                    <i class="bi bi-dash-circle me-2"></i>Stage 3: Distribution
+                                </span>
+                                <p class="mt-2 mb-1 small">Topping pattern, preparing for downtrend</p>
+                            {% elif sector.current_stage == 4 %}
+                                <span class="badge bg-danger px-4 py-3 fs-5">
+                                    <i class="bi bi-arrow-down-circle me-2"></i>Stage 4: Decline
+                                </span>
+                                <p class="mt-2 mb-1 small">Downtrend, declining</p>
+                            {% endif %}
+                            {% if sector.stage_updated_at %}
+                                <small class="text-muted d-block mt-2">Updated: {{ sector.stage_updated_at.strftime('%d %b %Y') }}</small>
+                            {% endif %}
+                            {% if sector.stage_confidence %}
+                                <small class="text-muted d-block">Confidence: {{ "%.0f"|format(sector.stage_confidence) }}%</small>
+                            {% endif %}
+                        {% else %}
+                            <p class="text-muted mb-0">No stage analysis available</p>
+                            <small class="text-muted">Run stage analysis from Settings</small>
+                        {% endif %}
                         {% if sector.index_symbol %}
-                            <div class="mt-2">
+                            <div class="mt-3">
                                 <span class="badge bg-info">{{ sector.index_symbol }}</span>
                             </div>
                         {% endif %}
@@ -96,6 +126,7 @@
                                 <th>Subsector</th>
                                 <th class="text-center">Index Value</th>
                                 <th class="text-center">Change</th>
+                                <th class="text-center">Stage</th>
                                 <th class="text-center">Stocks</th>
                                 <th class="text-center">Actions</th>
                             </tr>
@@ -134,6 +165,29 @@
                                         {% endif %}
                                     {% else %}
                                         <span class="text-muted">N/A</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if data.subsector.current_stage %}
+                                        {% if data.subsector.current_stage == 1 %}
+                                            <span class="badge bg-primary" title="Accumulation">
+                                                <i class="bi bi-circle"></i> Stage 1
+                                            </span>
+                                        {% elif data.subsector.current_stage == 2 %}
+                                            <span class="badge bg-success" title="Markup">
+                                                <i class="bi bi-arrow-up-circle"></i> Stage 2
+                                            </span>
+                                        {% elif data.subsector.current_stage == 3 %}
+                                            <span class="badge bg-warning text-dark" title="Distribution">
+                                                <i class="bi bi-dash-circle"></i> Stage 3
+                                            </span>
+                                        {% elif data.subsector.current_stage == 4 %}
+                                            <span class="badge bg-danger" title="Decline">
+                                                <i class="bi bi-arrow-down-circle"></i> Stage 4
+                                            </span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">--</span>
                                     {% endif %}
                                 </td>
                                 <td class="text-center">

@@ -1584,3 +1584,105 @@ def cancel_sync(task_id):
             'success': False,
             'error': str(e)
         }), 500
+
+
+# ============================================================================
+# STAGE ANALYSIS ROUTES
+# ============================================================================
+
+@settings_bp.route('/stage-analysis/run', methods=['POST'])
+@login_required
+def run_stage_analysis():
+    """Run stage analysis for all sectors and subsectors"""
+    try:
+        from app.stage_analysis_service import start_stage_analysis
+
+        # Start stage analysis task
+        success, message, task_id = start_stage_analysis(
+            current_user.id,
+            current_app._get_current_object()
+        )
+
+        if success:
+            return jsonify({
+                'success': True,
+                'message': message,
+                'task_id': task_id
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': message
+            }), 400
+
+    except Exception as e:
+        current_app.logger.error(f'Error starting stage analysis: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/stage-analysis/status', methods=['GET'])
+@login_required
+def stage_analysis_status():
+    """Get status of current stage analysis task"""
+    try:
+        from app.stage_analysis_service import get_stage_analysis_status
+
+        status = get_stage_analysis_status(current_user.id)
+
+        return jsonify({
+            'success': True,
+            'status': status
+        })
+
+    except Exception as e:
+        current_app.logger.error(f'Error getting stage analysis status: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/stage-analysis/cancel/<int:task_id>', methods=['POST'])
+@login_required
+def cancel_stage_analysis(task_id):
+    """Cancel a running stage analysis task"""
+    try:
+        from app.stage_analysis_service import cancel_stage_analysis as cancel_task
+        from app.models import StageAnalysisTask
+
+        # Verify task belongs to current user
+        task = StageAnalysisTask.query.get(task_id)
+        if not task:
+            return jsonify({
+                'success': False,
+                'error': 'Task not found'
+            }), 404
+
+        if task.user_id != current_user.id:
+            return jsonify({
+                'success': False,
+                'error': 'Unauthorized'
+            }), 403
+
+        success, message = cancel_task(task_id)
+
+        if success:
+            return jsonify({
+                'success': True,
+                'message': message
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': message
+            }), 400
+
+    except Exception as e:
+        current_app.logger.error(f'Error cancelling stage analysis: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
