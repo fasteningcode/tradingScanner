@@ -210,20 +210,20 @@
                         <td class="text-center">
                             {% if item.subsector.current_stage %}
                                 {% if item.subsector.current_stage == 1 %}
-                                    <span class="badge bg-primary" title="Accumulation">
-                                        <i class="bi bi-circle"></i> Stage 1
+                                    <span class="badge bg-primary">
+                                        <i class="bi bi-circle"></i> Accumulation
                                     </span>
                                 {% elif item.subsector.current_stage == 2 %}
-                                    <span class="badge bg-success" title="Markup">
-                                        <i class="bi bi-arrow-up-circle"></i> Stage 2
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-arrow-up-circle"></i> Markup
                                     </span>
                                 {% elif item.subsector.current_stage == 3 %}
-                                    <span class="badge bg-warning text-dark" title="Distribution">
-                                        <i class="bi bi-dash-circle"></i> Stage 3
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="bi bi-dash-circle"></i> Distribution
                                     </span>
                                 {% elif item.subsector.current_stage == 4 %}
-                                    <span class="badge bg-danger" title="Decline">
-                                        <i class="bi bi-arrow-down-circle"></i> Stage 4
+                                    <span class="badge bg-danger">
+                                        <i class="bi bi-arrow-down-circle"></i> Decline
                                     </span>
                                 {% endif %}
                             {% else %}
