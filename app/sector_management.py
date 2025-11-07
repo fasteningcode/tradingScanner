@@ -10,6 +10,7 @@ from app.models import Sector, SubSector, Instrument
 from app.sector_service import SectorService
 from app.subsector_service import SubSectorService
 from app.historical_index_service import HistoricalIndexService
+from app.price_service import get_stock_prices_with_changes
 
 sector_management_bp = Blueprint('sector_management', __name__, url_prefix='/sector-management')
 
@@ -343,12 +344,17 @@ def view_subsector_stocks(subsector_id):
         per_page=50
     )
 
+    # Get price data with percentage changes for current page stocks
+    tradingsymbols = [stock.tradingsymbol for stock in pagination.items]
+    price_data = get_stock_prices_with_changes(tradingsymbols)
+
     return render_template('sector_management/subsector_stocks.html',
                          title=f'{subsector.name} - Stocks',
                          subsector=subsector,
                          subsector_index=subsector_index,
                          pagination=pagination,
-                         search=search)
+                         search=search,
+                         price_data=price_data)
 
 
 # ============================================================================

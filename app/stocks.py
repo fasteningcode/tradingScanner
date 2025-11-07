@@ -4,6 +4,7 @@ from app import db
 from app.models import Instrument, Watchlist, WatchlistItem, SubSector, Sector
 from app.market_data import MarketDataService
 from app.stock_service import StockService
+from app.price_service import get_stock_prices_with_changes
 from sqlalchemy import or_
 
 stocks_bp = Blueprint('stocks', __name__, url_prefix='/stocks')
@@ -77,6 +78,10 @@ def index():
         is_nifty500=True
     ).count()
 
+    # Get price data with percentage changes for current page stocks
+    tradingsymbols = [stock.tradingsymbol for stock in stocks]
+    price_data = get_stock_prices_with_changes(tradingsymbols)
+
     return render_template('stocks/index.html',
                          title='NIFTY 500 Stocks',
                          stocks=stocks,
@@ -86,7 +91,8 @@ def index():
                          search=search,
                          selected_sector_id=sector_id,
                          selected_sub_sector_id=sub_sector_id,
-                         total_nifty500=total_nifty500)
+                         total_nifty500=total_nifty500,
+                         price_data=price_data)
 
 
 @stocks_bp.route('/<symbol>')

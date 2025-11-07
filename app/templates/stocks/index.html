@@ -89,6 +89,7 @@
                         <th>Company Name</th>
                         <th>Sector</th>
                         <th>Last Price</th>
+                        <th>% Change</th>
                         <th class="text-end">Actions</th>
                     </tr>
                 </thead>
@@ -112,10 +113,32 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if stock.last_price > 0 %}
-                            ₹{{ "%.2f"|format(stock.last_price) }}
+                            {% set price_info = price_data.get(stock.tradingsymbol, {}) %}
+                            {% set last_price = price_info.get('last_price', 0) %}
+                            {% if last_price > 0 %}
+                            ₹{{ "%.2f"|format(last_price) }}
                             {% else %}
                             -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% set price_info = price_data.get(stock.tradingsymbol, {}) %}
+                            {% set pct_change = price_info.get('percentage_change', 0) %}
+                            {% set change_dir = price_info.get('change_direction', 'neutral') %}
+                            {% if change_dir == 'up' %}
+                                <span class="badge bg-success">
+                                    <i class="bi bi-arrow-up"></i> +{{ "%.2f"|format(pct_change) }}%
+                                </span>
+                            {% elif change_dir == 'down' %}
+                                <span class="badge bg-danger">
+                                    <i class="bi bi-arrow-down"></i> {{ "%.2f"|format(pct_change) }}%
+                                </span>
+                            {% elif pct_change == 0 %}
+                                <span class="badge bg-secondary">
+                                    <i class="bi bi-arrow-right"></i> 0.00%
+                                </span>
+                            {% else %}
+                                <span class="text-muted">--</span>
                             {% endif %}
                         </td>
                         <td class="text-end">
