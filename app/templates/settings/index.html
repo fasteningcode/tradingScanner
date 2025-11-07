@@ -2790,9 +2790,9 @@
 
     // Start polling for sync status
     function startSyncStatusPolling() {
-        // Poll every 2 seconds
-        syncCheckInterval = setInterval(checkSyncStatus, 2000);
-        checkSyncStatus(); // Check immediately
+        // Poll every 2 seconds with completion alerts enabled
+        syncCheckInterval = setInterval(() => checkSyncStatus(true), 2000);
+        checkSyncStatus(true); // Check immediately with alerts enabled
     }
 
     // Stop polling for sync status
@@ -2804,7 +2804,7 @@
     }
 
     // Check sync status
-    function checkSyncStatus() {
+    function checkSyncStatus(showCompletionAlert = false) {
         console.log('Checking sync status...');
         fetch('{{ url_for("settings.sync_status") }}', {
             method: 'GET',
@@ -2824,16 +2824,18 @@
                     console.log('Sync finished with status:', data.status.status);
                     stopSyncStatusPolling();
 
-                    // Show completion message
-                    if (data.status.status === 'completed') {
-                        alert(
-                            `Sync completed! Synced: ${data.status.synced_stocks}, ` +
-                            `Skipped: ${data.status.skipped_stocks}, ` +
-                            `Failed: ${data.status.failed_stocks}, ` +
-                            `New Candles Added: ${data.status.new_candles_added}`
-                        );
-                    } else if (data.status.status === 'failed') {
-                        alert('Sync failed: ' + (data.status.error_message || 'Unknown error'));
+                    // Show completion message only if explicitly requested (during active polling)
+                    if (showCompletionAlert) {
+                        if (data.status.status === 'completed') {
+                            alert(
+                                `Sync completed! Synced: ${data.status.synced_stocks}, ` +
+                                `Skipped: ${data.status.skipped_stocks}, ` +
+                                `Failed: ${data.status.failed_stocks}, ` +
+                                `New Candles Added: ${data.status.new_candles_added}`
+                            );
+                        } else if (data.status.status === 'failed') {
+                            alert('Sync failed: ' + (data.status.error_message || 'Unknown error'));
+                        }
                     }
 
                     // Reset UI after a delay
