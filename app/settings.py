@@ -6,7 +6,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required, current_user, logout_user
 from werkzeug.utils import secure_filename
 from app import db
-from app.models import User, HistoricalDataSettings, HistoricalData, DownloadTask, DownloadLog, Instrument, StockInformation, MarketCapFetchTask
+from app.models import User, HistoricalDataSettings, HistoricalData, DownloadTask, DownloadLog, Instrument, StockInformation, MarketCapFetchTask, StockStageAnalysisTask
 from app.forms import BackupForm, RestoreDatabaseForm, EmergencyRestoreForm, KiteCredentialsForm
 from app.kite_auth import get_kite_client
 from app import marketcap_service
@@ -1682,6 +1682,136 @@ def cancel_stage_analysis(task_id):
 
     except Exception as e:
         current_app.logger.error(f'Error cancelling stage analysis: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ==================== Stock Stage Analysis Routes ====================
+
+@settings_bp.route('/stock-stage-analysis/run', methods=['POST'])
+@login_required
+def run_stock_stage_analysis():
+    """Start a new stock stage analysis task"""
+    try:
+        from app.stock_stage_analysis_service import start_stock_stage_analysis
+
+        # Get filter parameters from request
+        data = request.get_json() or {}
+        filter_type = data.get('filter_type', 'nifty500')  # 'nifty500', 'all', 'sector', 'subsector'
+        sector_id = data.get('sector_id')
+        subsector_id = data.get('subsector_id')
+
+        # Validate filter type
+        valid_filters = ['nifty500', 'all', 'sector', 'subsector']
+        if filter_type not in valid_filters:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid filter type. Must be one of: {", ".join(valid_filters)}'
+            }), 400
+
+        # Validate sector/subsector IDs based on filter type
+        if filter_type == 'sector' and not sector_id:
+            return jsonify({
+                'success': False,
+                'error': 'sector_id required for sector filter'
+            }), 400
+
+        if filter_type == 'subsector' and not subsector_id:
+            return jsonify({
+                'success': False,
+                'error': 'subsector_id required for subsector filter'
+            }), 400
+
+        # Start stock stage analysis task
+        task_id = start_stock_stage_analysis(
+            current_user.id,
+            filter_type=filter_type,
+            sector_id=sector_id,
+            subsector_id=subsector_id,
+            app=current_app._get_current_object()
+        )
+
+        if task_id:
+            return jsonify({
+                'success': True,
+                'message': 'Stock stage analysis started successfully',
+                'task_id': task_id
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to start stock stage analysis'
+            }), 500
+
+    except Exception as e:
+        current_app.logger.error(f'Error starting stock stage analysis: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/stock-stage-analysis/status', methods=['GET'])
+@login_required
+def stock_stage_analysis_status():
+    """Get status of current stock stage analysis task"""
+    try:
+        from app.stock_stage_analysis_service import get_stock_stage_analysis_status
+
+        status = get_stock_stage_analysis_status(current_user.id)
+
+        return jsonify({
+            'success': True,
+            'status': status
+        })
+
+    except Exception as e:
+        current_app.logger.error(f'Error getting stock stage analysis status: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/stock-stage-analysis/cancel/<int:task_id>', methods=['POST'])
+@login_required
+def cancel_stock_stage_analysis(task_id):
+    """Cancel a running stock stage analysis task"""
+    try:
+        from app.stock_stage_analysis_service import cancel_stock_stage_analysis as cancel_task
+        from app.models import StockStageAnalysisTask
+
+        # Verify task belongs to current user
+        task = StockStageAnalysisTask.query.get(task_id)
+        if not task:
+            return jsonify({
+                'success': False,
+                'error': 'Task not found'
+            }), 404
+
+        if task.user_id != current_user.id:
+            return jsonify({
+                'success': False,
+                'error': 'Unauthorized'
+            }), 403
+
+        success = cancel_task(task_id)
+
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Stock stage analysis cancelled successfully'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to cancel task'
+            }), 400
+
+    except Exception as e:
+        current_app.logger.error(f'Error cancelling stock stage analysis: {str(e)}')
         return jsonify({
             'success': False,
             'error': str(e)
