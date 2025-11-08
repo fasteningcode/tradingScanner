@@ -14,7 +14,7 @@
 </div>
 
 <div class="row justify-content-center">
-    <div class="col-md-8">
+    <div class="col-12">
         <div class="card shadow-sm">
             <div class="card-header">
                 <h5 class="card-title mb-0">
@@ -23,63 +23,414 @@
                 </h5>
             </div>
             <div class="card-body">
-                <form method="post" novalidate>
+                <form method="post" novalidate id="profileForm">
                     {{ form.hidden_tag() }}
+                    {{ form.criteria_json() }}
 
-                    <div class="mb-3">
-                        {{ form.name.label(class="form-label") }}
-                        {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
-                        {% if form.name.errors %}
-                            <div class="invalid-feedback">
-                                {% for error in form.name.errors %}
-                                    {{ error }}
-                                {% endfor %}
+                    <div class="row">
+                        <!-- Left Column: Basic Info -->
+                        <div class="col-md-4">
+                            <h6 class="mb-3"><i class="bi bi-info-circle me-2"></i>Basic Information</h6>
+
+                            <div class="mb-3">
+                                {{ form.name.label(class="form-label") }}
+                                {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
+                                {% if form.name.errors %}
+                                    <div class="invalid-feedback">
+                                        {% for error in form.name.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">
+                                    Give your scanner profile a unique name
+                                </small>
                             </div>
-                        {% endif %}
-                        <small class="form-text text-muted">
-                            Give your scanner profile a unique name
-                        </small>
-                    </div>
 
-                    <div class="mb-3">
-                        {{ form.description.label(class="form-label") }}
-                        {{ form.description(class="form-control" + (" is-invalid" if form.description.errors else ""), rows=3) }}
-                        {% if form.description.errors %}
-                            <div class="invalid-feedback">
-                                {% for error in form.description.errors %}
-                                    {{ error }}
-                                {% endfor %}
+                            <div class="mb-3">
+                                {{ form.description.label(class="form-label") }}
+                                {{ form.description(class="form-control" + (" is-invalid" if form.description.errors else ""), rows=3) }}
+                                {% if form.description.errors %}
+                                    <div class="invalid-feedback">
+                                        {% for error in form.description.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">
+                                    Optional: Describe what this profile scans for
+                                </small>
                             </div>
-                        {% endif %}
-                        <small class="form-text text-muted">
-                            Optional: Describe what this profile scans for
-                        </small>
-                    </div>
 
-                    <div class="mb-3">
-                        <div class="form-check">
-                            {{ form.is_default(class="form-check-input") }}
-                            {{ form.is_default.label(class="form-check-label") }}
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    {{ form.is_default(class="form-check-input") }}
+                                    {{ form.is_default.label(class="form-check-label") }}
+                                </div>
+                                <small class="form-text text-muted">
+                                    Auto-selected when opening scanner
+                                </small>
+                            </div>
+
+                            <hr>
+
+                            <h6 class="mb-3"><i class="bi bi-funnel me-2"></i>Scan Level</h6>
+                            <div class="mb-3">
+                                {% for subfield in form.scan_level %}
+                                    <div class="form-check">
+                                        {{ subfield(class="form-check-input", onclick="toggleScanLevel()") }}
+                                        {{ subfield.label(class="form-check-label") }}
+                                    </div>
+                                {% endfor %}
+                                <small class="form-text text-muted">
+                                    Choose whether to scan by sector or subsector
+                                </small>
+                            </div>
+
+                            <div class="alert alert-sm alert-secondary">
+                                <small><strong>Selection Summary:</strong></small>
+                                <div id="selectionSummary" class="mt-2">
+                                    <small class="text-muted">No selections made yet</small>
+                                </div>
+                            </div>
                         </div>
-                        <small class="form-text text-muted">
-                            The default profile will be automatically selected when you open the scanner
-                        </small>
+
+                        <!-- Right Column: Sector/Subsector Selection -->
+                        <div class="col-md-8">
+                            <h6 class="mb-3">
+                                <i class="bi bi-check2-square me-2"></i>
+                                <span id="selectionTitle">Select Subsectors</span>
+                            </h6>
+
+                            <!-- Sector Level Selection UI -->
+                            <div id="sectorLevelUI" style="display: none;">
+                                <div class="mb-3">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectAllSectors()">
+                                        <i class="bi bi-check-all me-1"></i>Select All Sectors
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearAllSectors()">
+                                        <i class="bi bi-x-circle me-1"></i>Clear All
+                                    </button>
+                                </div>
+
+                                <div class="accordion" id="sectorAccordion">
+                                    {% for stage_num in [2, 1, 3, 4] %}
+                                        {% set sectors_in_stage = sectors_by_stage.get(stage_num, []) %}
+                                        {% if sectors_in_stage %}
+                                            {% if stage_num == 1 %}
+                                                {% set stage_name = "Accumulation" %}
+                                                {% set stage_class = "primary" %}
+                                                {% set stage_icon = "circle" %}
+                                            {% elif stage_num == 2 %}
+                                                {% set stage_name = "Markup" %}
+                                                {% set stage_class = "success" %}
+                                                {% set stage_icon = "arrow-up-circle" %}
+                                            {% elif stage_num == 3 %}
+                                                {% set stage_name = "Distribution" %}
+                                                {% set stage_class = "warning" %}
+                                                {% set stage_icon = "dash-circle" %}
+                                            {% elif stage_num == 4 %}
+                                                {% set stage_name = "Decline" %}
+                                                {% set stage_class = "danger" %}
+                                                {% set stage_icon = "arrow-down-circle" %}
+                                            {% endif %}
+
+                                            <div class="accordion-item">
+                                                <h2 class="accordion-header">
+                                                    <button class="accordion-button {{ 'collapsed' if stage_num != 2 else '' }}" type="button" data-bs-toggle="collapse" data-bs-target="#sectorStage{{ stage_num }}">
+                                                        <span class="badge bg-{{ stage_class }} me-2">
+                                                            <i class="bi bi-{{ stage_icon }}"></i> Stage {{ stage_num }}: {{ stage_name }}
+                                                        </span>
+                                                        <span class="text-muted small">({{ sectors_in_stage|length }} sectors)</span>
+                                                    </button>
+                                                </h2>
+                                                <div id="sectorStage{{ stage_num }}" class="accordion-collapse collapse {{ 'show' if stage_num == 2 else '' }}" data-bs-parent="#sectorAccordion">
+                                                    <div class="accordion-body">
+                                                        <div class="row">
+                                                            {% for sector in sectors_in_stage %}
+                                                                <div class="col-md-6 mb-2">
+                                                                    <div class="form-check">
+                                                                        <input class="form-check-input sector-checkbox" type="checkbox"
+                                                                               value="{{ sector.id }}"
+                                                                               id="sector_{{ sector.id }}"
+                                                                               data-sector-name="{{ sector.name }}"
+                                                                               onclick="updateSelections()">
+                                                                        <label class="form-check-label" for="sector_{{ sector.id }}">
+                                                                            <i class="{{ sector.icon }} me-1" style="color: {{ sector.color }};"></i>
+                                                                            {{ sector.name }}
+                                                                            <small class="text-muted">({{ sector_stock_counts.get(sector.id, 0) }} stocks)</small>
+                                                                        </label>
+                                                                    </div>
+                                                                </div>
+                                                            {% endfor %}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <!-- Subsector Level Selection UI -->
+                            <div id="subsectorLevelUI">
+                                <div class="mb-3">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectAllSubsectors()">
+                                        <i class="bi bi-check-all me-1"></i>Select All Subsectors
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearAllSubsectors()">
+                                        <i class="bi bi-x-circle me-1"></i>Clear All
+                                    </button>
+                                </div>
+
+                                <div class="accordion" id="subsectorAccordion">
+                                    {% for sector in all_sectors %}
+                                        {% set sector_subsectors = subsectors_by_sector.get(sector.id, {}) %}
+                                        {% set total_subsectors = sector_subsectors.get(1, [])|length + sector_subsectors.get(2, [])|length + sector_subsectors.get(3, [])|length + sector_subsectors.get(4, [])|length %}
+                                        {% if total_subsectors > 0 %}
+                                            <div class="accordion-item">
+                                                <h2 class="accordion-header">
+                                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#subsectorSector{{ sector.id }}">
+                                                        <i class="{{ sector.icon }} me-2" style="color: {{ sector.color }};"></i>
+                                                        {{ sector.name }}
+                                                        <span class="text-muted small ms-2">({{ total_subsectors }} subsectors)</span>
+                                                    </button>
+                                                </h2>
+                                                <div id="subsectorSector{{ sector.id }}" class="accordion-collapse collapse" data-bs-parent="#subsectorAccordion">
+                                                    <div class="accordion-body">
+                                                        {% for stage_num in [2, 1, 3, 4] %}
+                                                            {% set subsectors_in_stage = sector_subsectors.get(stage_num, []) %}
+                                                            {% if subsectors_in_stage %}
+                                                                {% if stage_num == 1 %}
+                                                                    {% set stage_name = "Accumulation" %}
+                                                                    {% set stage_class = "primary" %}
+                                                                    {% set stage_icon = "circle" %}
+                                                                {% elif stage_num == 2 %}
+                                                                    {% set stage_name = "Markup" %}
+                                                                    {% set stage_class = "success" %}
+                                                                    {% set stage_icon = "arrow-up-circle" %}
+                                                                {% elif stage_num == 3 %}
+                                                                    {% set stage_name = "Distribution" %}
+                                                                    {% set stage_class = "warning" %}
+                                                                    {% set stage_icon = "dash-circle" %}
+                                                                {% elif stage_num == 4 %}
+                                                                    {% set stage_name = "Decline" %}
+                                                                    {% set stage_class = "danger" %}
+                                                                    {% set stage_icon = "arrow-down-circle" %}
+                                                                {% endif %}
+
+                                                                <div class="mb-3">
+                                                                    <h6 class="mb-2">
+                                                                        <span class="badge bg-{{ stage_class }}">
+                                                                            <i class="bi bi-{{ stage_icon }}"></i> Stage {{ stage_num }}: {{ stage_name }}
+                                                                        </span>
+                                                                    </h6>
+                                                                    <div class="row">
+                                                                        {% for subsector in subsectors_in_stage %}
+                                                                            <div class="col-md-6 mb-2">
+                                                                                <div class="form-check">
+                                                                                    <input class="form-check-input subsector-checkbox" type="checkbox"
+                                                                                           value="{{ subsector.id }}"
+                                                                                           id="subsector_{{ subsector.id }}"
+                                                                                           data-subsector-name="{{ subsector.name }}"
+                                                                                           data-sector-name="{{ sector.name }}"
+                                                                                           onclick="updateSelections()">
+                                                                                    <label class="form-check-label" for="subsector_{{ subsector.id }}">
+                                                                                        {{ subsector.name }}
+                                                                                        <small class="text-muted">({{ subsector_stock_counts.get(subsector.id, 0) }} stocks)</small>
+                                                                                    </label>
+                                                                                </div>
+                                                                            </div>
+                                                                        {% endfor %}
+                                                                    </div>
+                                                                </div>
+                                                            {% endif %}
+                                                        {% endfor %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle me-2"></i>
-                        <strong>Note:</strong> Scanning criteria (price range, volume, RS, stage, etc.) will be configured in upcoming updates. For now, you can create profile placeholders.
-                    </div>
+                    <hr class="my-4">
 
                     <div class="d-flex justify-content-between">
                         <a href="{{ url_for('scanner.index', tab='profiles') }}" class="btn btn-secondary">
                             <i class="bi bi-x-circle me-2"></i>Cancel
                         </a>
-                        {{ form.submit(class="btn btn-primary") }}
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save me-2"></i>{{ form.submit.label.text }}
+                        </button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Toggle between sector and subsector level UI
+    function toggleScanLevel() {
+        const scanLevel = document.querySelector('input[name="scan_level"]:checked').value;
+        const sectorUI = document.getElementById('sectorLevelUI');
+        const subsectorUI = document.getElementById('subsectorLevelUI');
+        const title = document.getElementById('selectionTitle');
+
+        if (scanLevel === 'sector') {
+            sectorUI.style.display = 'block';
+            subsectorUI.style.display = 'none';
+            title.textContent = 'Select Sectors';
+            // Clear subsector selections
+            document.querySelectorAll('.subsector-checkbox').forEach(cb => cb.checked = false);
+        } else {
+            sectorUI.style.display = 'none';
+            subsectorUI.style.display = 'block';
+            title.textContent = 'Select Subsectors';
+            // Clear sector selections
+            document.querySelectorAll('.sector-checkbox').forEach(cb => cb.checked = false);
+        }
+        updateSelections();
+    }
+
+    // Select all sectors
+    function selectAllSectors() {
+        document.querySelectorAll('.sector-checkbox').forEach(cb => cb.checked = true);
+        updateSelections();
+    }
+
+    // Clear all sectors
+    function clearAllSectors() {
+        document.querySelectorAll('.sector-checkbox').forEach(cb => cb.checked = false);
+        updateSelections();
+    }
+
+    // Select all subsectors
+    function selectAllSubsectors() {
+        document.querySelectorAll('.subsector-checkbox').forEach(cb => cb.checked = true);
+        updateSelections();
+    }
+
+    // Clear all subsectors
+    function clearAllSubsectors() {
+        document.querySelectorAll('.subsector-checkbox').forEach(cb => cb.checked = false);
+        updateSelections();
+    }
+
+    // Update selection summary and criteria JSON
+    function updateSelections() {
+        const scanLevel = document.querySelector('input[name="scan_level"]:checked').value;
+        const summaryDiv = document.getElementById('selectionSummary');
+        const criteriaField = document.getElementById('criteria_json');
+
+        let selectedIds = [];
+        let summaryHTML = '';
+
+        if (scanLevel === 'sector') {
+            const checkedSectors = document.querySelectorAll('.sector-checkbox:checked');
+            selectedIds = Array.from(checkedSectors).map(cb => parseInt(cb.value));
+
+            if (selectedIds.length === 0) {
+                summaryHTML = '<small class="text-muted">No sectors selected</small>';
+            } else {
+                const sectorNames = Array.from(checkedSectors).map(cb => cb.dataset.sectorName);
+                summaryHTML = `<small><strong>${selectedIds.length} Sectors:</strong><br>${sectorNames.join(', ')}</small>`;
+            }
+        } else {
+            const checkedSubsectors = document.querySelectorAll('.subsector-checkbox:checked');
+            selectedIds = Array.from(checkedSubsectors).map(cb => parseInt(cb.value));
+
+            if (selectedIds.length === 0) {
+                summaryHTML = '<small class="text-muted">No subsectors selected</small>';
+            } else {
+                // Group by sector for better display
+                const bySector = {};
+                checkedSubsectors.forEach(cb => {
+                    const sectorName = cb.dataset.sectorName;
+                    if (!bySector[sectorName]) bySector[sectorName] = [];
+                    bySector[sectorName].push(cb.dataset.subsectorName);
+                });
+
+                summaryHTML = `<small><strong>${selectedIds.length} Subsectors:</strong><br>`;
+                for (const [sector, subsectors] of Object.entries(bySector)) {
+                    summaryHTML += `<br><em>${sector}:</em> ${subsectors.join(', ')}`;
+                }
+                summaryHTML += '</small>';
+            }
+        }
+
+        summaryDiv.innerHTML = summaryHTML;
+
+        // Update criteria JSON
+        const criteria = {
+            scan_level: scanLevel,
+            selected_sectors: scanLevel === 'sector' ? selectedIds : [],
+            selected_subsectors: scanLevel === 'subsector' ? selectedIds : [],
+            version: '1.0'
+        };
+
+        criteriaField.value = JSON.stringify(criteria);
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize scan level UI
+        toggleScanLevel();
+
+        // If editing, restore selections from criteria JSON
+        const criteriaField = document.getElementById('criteria_json');
+        if (criteriaField.value) {
+            try {
+                const criteria = JSON.parse(criteriaField.value);
+
+                // Set scan level
+                if (criteria.scan_level) {
+                    document.querySelector(`input[name="scan_level"][value="${criteria.scan_level}"]`).checked = true;
+                    toggleScanLevel();
+                }
+
+                // Restore sector selections
+                if (criteria.selected_sectors && criteria.selected_sectors.length > 0) {
+                    criteria.selected_sectors.forEach(id => {
+                        const checkbox = document.getElementById(`sector_${id}`);
+                        if (checkbox) checkbox.checked = true;
+                    });
+                }
+
+                // Restore subsector selections
+                if (criteria.selected_subsectors && criteria.selected_subsectors.length > 0) {
+                    criteria.selected_subsectors.forEach(id => {
+                        const checkbox = document.getElementById(`subsector_${id}`);
+                        if (checkbox) checkbox.checked = true;
+                    });
+                }
+
+                updateSelections();
+            } catch (e) {
+                console.error('Error parsing criteria JSON:', e);
+            }
+        }
+    });
+
+    // Validate form before submission
+    document.getElementById('profileForm').addEventListener('submit', function(e) {
+        const scanLevel = document.querySelector('input[name="scan_level"]:checked').value;
+        const criteriaField = document.getElementById('criteria_json');
+        const criteria = JSON.parse(criteriaField.value || '{}');
+
+        const hasSelections = (scanLevel === 'sector' && criteria.selected_sectors && criteria.selected_sectors.length > 0) ||
+                             (scanLevel === 'subsector' && criteria.selected_subsectors && criteria.selected_subsectors.length > 0);
+
+        if (!hasSelections) {
+            e.preventDefault();
+            alert('Please select at least one ' + (scanLevel === 'sector' ? 'sector' : 'subsector') + ' to scan.');
+            return false;
+        }
+    });
+</script>
 {% endblock %}

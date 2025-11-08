@@ -10,10 +10,11 @@ Routes for stock scanner feature including:
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, current_app
 from flask_login import login_required, current_user
 from app import db
-from app.models import ScannerProfile, ScannerTask, ScanResult
+from app.models import ScannerProfile, ScannerTask, ScanResult, Sector, SubSector, Instrument
 from app.forms import ScannerProfileForm
 from app import scanner_service
 from datetime import datetime
+import json
 
 scanner_bp = Blueprint('scanner', __name__, url_prefix='/scanner')
 
@@ -73,17 +74,29 @@ def create_profile():
 
             if existing:
                 flash(f'A profile named "{form.name.data}" already exists.', 'warning')
+                # Get sector/subsector data for re-rendering
+                sectors_data = _get_sectors_subsectors_data()
                 return render_template('scanner/profile_form.html',
                                      title='Create Scanner Profile',
                                      form=form,
-                                     action='create')
+                                     action='create',
+                                     **sectors_data)
+
+            # Parse criteria JSON from hidden field
+            criteria_json = form.criteria_json.data or '{}'
+
+            # Validate JSON
+            try:
+                criteria_dict = json.loads(criteria_json)
+            except json.JSONDecodeError:
+                criteria_dict = {}
 
             # Create new profile
             profile = ScannerProfile(
                 user_id=current_user.id,
                 name=form.name.data,
                 description=form.description.data,
-                criteria='{}',  # Empty JSON for now, will be populated later
+                criteria=json.dumps(criteria_dict),
                 is_default=form.is_default.data
             )
 
@@ -105,10 +118,14 @@ def create_profile():
             flash(f'Error creating profile: {str(e)}', 'danger')
             current_app.logger.error(f'Error creating scanner profile: {str(e)}', exc_info=True)
 
+    # Get sector/subsector data for rendering
+    sectors_data = _get_sectors_subsectors_data()
+
     return render_template('scanner/profile_form.html',
                          title='Create Scanner Profile',
                          form=form,
-                         action='create')
+                         action='create',
+                         **sectors_data)
 
 
 @scanner_bp.route('/profiles/<int:profile_id>/edit', methods=['GET', 'POST'])
@@ -123,6 +140,16 @@ def edit_profile(profile_id):
 
     form = ScannerProfileForm(obj=profile)
 
+    # Pre-populate form with existing criteria on GET request
+    if request.method == 'GET':
+        # Parse existing criteria
+        try:
+            criteria = json.loads(profile.criteria) if profile.criteria else {}
+            form.scan_level.data = criteria.get('scan_level', 'subsector')
+            form.criteria_json.data = profile.criteria
+        except json.JSONDecodeError:
+            form.criteria_json.data = '{}'
+
     if form.validate_on_submit():
         try:
             # Check if new name conflicts with another profile
@@ -134,15 +161,28 @@ def edit_profile(profile_id):
 
                 if existing:
                     flash(f'A profile named "{form.name.data}" already exists.', 'warning')
+                    # Get sector/subsector data for re-rendering
+                    sectors_data = _get_sectors_subsectors_data()
                     return render_template('scanner/profile_form.html',
                                          title='Edit Scanner Profile',
                                          form=form,
                                          action='edit',
-                                         profile=profile)
+                                         profile=profile,
+                                         **sectors_data)
+
+            # Parse criteria JSON from hidden field
+            criteria_json = form.criteria_json.data or '{}'
+
+            # Validate JSON
+            try:
+                criteria_dict = json.loads(criteria_json)
+            except json.JSONDecodeError:
+                criteria_dict = {}
 
             # Update profile
             profile.name = form.name.data
             profile.description = form.description.data
+            profile.criteria = json.dumps(criteria_dict)
             profile.updated_at = datetime.utcnow()
 
             # Handle default status
@@ -167,11 +207,15 @@ def edit_profile(profile_id):
             flash(f'Error updating profile: {str(e)}', 'danger')
             current_app.logger.error(f'Error updating scanner profile: {str(e)}', exc_info=True)
 
+    # Get sector/subsector data for rendering
+    sectors_data = _get_sectors_subsectors_data()
+
     return render_template('scanner/profile_form.html',
                          title='Edit Scanner Profile',
                          form=form,
                          action='edit',
-                         profile=profile)
+                         profile=profile,
+                         **sectors_data)
 
 
 @scanner_bp.route('/profiles/<int:profile_id>/delete', methods=['POST'])
@@ -363,3 +407,73 @@ def get_results():
             'success': False,
             'error': str(e)
         }), 500
+
+
+# Helper Functions
+
+def _get_sectors_subsectors_data():
+    """
+    Helper function to get sectors and subsectors grouped by stage
+    Returns dictionary with sectors_by_stage and subsectors_by_sector_and_stage
+    """
+    # Get all active sectors ordered by display_order and name
+    sectors = Sector.query.filter_by(is_active=True).order_by(
+        Sector.display_order, Sector.name
+    ).all()
+
+    # Get all active subsectors
+    subsectors = SubSector.query.filter_by(is_active=True).order_by(
+        SubSector.display_order, SubSector.name
+    ).all()
+
+    # Group sectors by stage
+    sectors_by_stage = {1: [], 2: [], 3: [], 4: [], None: []}
+    for sector in sectors:
+        stage = sector.current_stage
+        if stage not in sectors_by_stage:
+            sectors_by_stage[stage] = []
+        sectors_by_stage[stage].append(sector)
+
+    # Group subsectors by sector and then by stage
+    subsectors_by_sector = {}
+    for subsector in subsectors:
+        sector_id = subsector.sector_id
+        if sector_id not in subsectors_by_sector:
+            subsectors_by_sector[sector_id] = {1: [], 2: [], 3: [], 4: [], None: []}
+
+        stage = subsector.current_stage
+        if stage not in subsectors_by_sector[sector_id]:
+            subsectors_by_sector[sector_id][stage] = []
+        subsectors_by_sector[sector_id][stage].append(subsector)
+
+    # Get stock counts for each sector and subsector
+    sector_stock_counts = {}
+    for sector in sectors:
+        # Count NIFTY 500 stocks in this sector via subsectors
+        count = db.session.query(Instrument).join(
+            SubSector, Instrument.sub_sector_id == SubSector.id
+        ).filter(
+            SubSector.sector_id == sector.id,
+            Instrument.is_nifty500 == True,
+            Instrument.exchange == 'NSE',
+            Instrument.instrument_type == 'EQ'
+        ).count()
+        sector_stock_counts[sector.id] = count
+
+    subsector_stock_counts = {}
+    for subsector in subsectors:
+        count = Instrument.query.filter_by(
+            sub_sector_id=subsector.id,
+            is_nifty500=True,
+            exchange='NSE',
+            instrument_type='EQ'
+        ).count()
+        subsector_stock_counts[subsector.id] = count
+
+    return {
+        'sectors_by_stage': sectors_by_stage,
+        'subsectors_by_sector': subsectors_by_sector,
+        'sector_stock_counts': sector_stock_counts,
+        'subsector_stock_counts': subsector_stock_counts,
+        'all_sectors': sectors
+    }

@@ -6,11 +6,12 @@ Scanning logic will be implemented later based on user requirements.
 """
 
 import threading
+import json
 from typing import Optional, Dict, List
 from datetime import datetime
 from flask import current_app
 from app import db
-from app.models import ScannerProfile, ScannerTask, Instrument
+from app.models import ScannerProfile, ScannerTask, Instrument, SubSector
 
 # Dictionary to track running scanner tasks
 _running_tasks = {}
@@ -173,10 +174,7 @@ class Scanner:
 
     def run(self):
         """
-        Execute the scanner
-
-        NOTE: This is a placeholder implementation.
-        Actual scanning logic will be implemented later based on user requirements.
+        Execute the scanner with criteria filtering
         """
         current_app.logger.info(f'Scanner task {self.task_id}: Starting run()')
 
@@ -186,13 +184,8 @@ class Scanner:
         db.session.commit()
         current_app.logger.info(f'Scanner task {self.task_id}: Status set to running')
 
-        # Get stocks to scan
-        # For now, just scan all NIFTY 500 stocks as a placeholder
-        stocks = Instrument.query.filter_by(
-            exchange='NSE',
-            instrument_type='EQ',
-            is_nifty500=True
-        ).all()
+        # Get stocks to scan based on profile criteria
+        stocks = self._get_stocks_to_scan()
 
         self.task.total_stocks = len(stocks)
         db.session.commit()
@@ -208,8 +201,8 @@ class Scanner:
             db.session.commit()
             return
 
-        # Placeholder: Just loop through stocks without actual filtering
-        # Actual scanning logic will be added later
+        # Scan stocks
+        # NOTE: Additional filtering criteria (price, volume, RS, stage, etc.) will be added later
         for idx, stock in enumerate(stocks):
             # Check if task was cancelled
             db.session.refresh(self.task)
@@ -222,8 +215,9 @@ class Scanner:
                 db.session.commit()
 
                 # TODO: Add actual scanning/filtering logic here
-                # For now, just simulate scanning by counting all stocks as scanned
+                # For now, just count all stocks as scanned (matched)
                 self.task.scanned_stocks += 1
+                self.task.matched_stocks += 1  # All stocks match for now
 
                 # Update progress
                 self.task.progress_percentage = ((idx + 1) / len(stocks)) * 100
@@ -250,6 +244,70 @@ class Scanner:
             f'Matched: {self.task.matched_stocks}, '
             f'Failed: {self.task.failed_stocks}'
         )
+
+    def _get_stocks_to_scan(self) -> List[Instrument]:
+        """
+        Get stocks to scan based on profile criteria
+
+        Returns:
+            List of Instrument objects matching criteria
+        """
+        # Get profile
+        profile = self.task.profile
+        if not profile or not profile.criteria:
+            # No criteria, scan all NIFTY 500 stocks
+            current_app.logger.info(f'Scanner task {self.task_id}: No criteria, scanning all NIFTY 500')
+            return Instrument.query.filter_by(
+                exchange='NSE',
+                instrument_type='EQ',
+                is_nifty500=True
+            ).all()
+
+        # Parse criteria
+        try:
+            criteria = json.loads(profile.criteria)
+        except json.JSONDecodeError:
+            current_app.logger.warning(f'Scanner task {self.task_id}: Invalid criteria JSON, scanning all NIFTY 500')
+            return Instrument.query.filter_by(
+                exchange='NSE',
+                instrument_type='EQ',
+                is_nifty500=True
+            ).all()
+
+        scan_level = criteria.get('scan_level', 'subsector')
+        selected_sectors = criteria.get('selected_sectors', [])
+        selected_subsectors = criteria.get('selected_subsectors', [])
+
+        current_app.logger.info(
+            f'Scanner task {self.task_id}: Criteria - Level: {scan_level}, '
+            f'Sectors: {selected_sectors}, Subsectors: {selected_subsectors}'
+        )
+
+        # Build query based on scan level
+        query = Instrument.query.filter_by(
+            exchange='NSE',
+            instrument_type='EQ',
+            is_nifty500=True
+        )
+
+        if scan_level == 'sector' and selected_sectors:
+            # Filter by selected sectors (via subsector relationship)
+            query = query.join(SubSector, Instrument.sub_sector_id == SubSector.id).filter(
+                SubSector.sector_id.in_(selected_sectors)
+            )
+        elif scan_level == 'subsector' and selected_subsectors:
+            # Filter by selected subsectors
+            query = query.filter(
+                Instrument.sub_sector_id.in_(selected_subsectors)
+            )
+        else:
+            # No valid selections, scan all NIFTY 500
+            current_app.logger.warning(f'Scanner task {self.task_id}: No valid selections in criteria')
+
+        stocks = query.all()
+        current_app.logger.info(f'Scanner task {self.task_id}: Filtered to {len(stocks)} stocks')
+
+        return stocks
 
 
 # Profile Management Functions

@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileRequired, FileAllowed
-from wtforms import StringField, PasswordField, BooleanField, SubmitField, TextAreaField
+from wtforms import StringField, PasswordField, BooleanField, SubmitField, TextAreaField, RadioField, HiddenField
 from wtforms.validators import DataRequired, Email, EqualTo, Length, ValidationError, Optional
 from app.models import User
 
@@ -126,5 +126,11 @@ class ScannerProfileForm(FlaskForm):
         Optional(),
         Length(max=500, message='Description cannot exceed 500 characters')
     ])
+    scan_level = RadioField('Scan Level',
+        choices=[('subsector', 'Subsector Level'), ('sector', 'Sector Level')],
+        default='subsector',
+        validators=[DataRequired(message='Please select a scan level')]
+    )
+    criteria_json = HiddenField('Criteria JSON')
     is_default = BooleanField('Set as Default Profile')
     submit = SubmitField('Save Profile')
