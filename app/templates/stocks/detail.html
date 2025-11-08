@@ -140,6 +140,88 @@
 </div>
 {% endif %}
 
+<!-- Relative Strength Metrics -->
+{% if instrument.rs_vs_subsector is not none or instrument.rs_vs_sector is not none %}
+<div class="card card-modern shadow-sm mb-4">
+    <div class="card-header bg-info text-white">
+        <h5 class="card-title mb-0">
+            <i class="bi bi-speedometer2 me-2"></i> Relative Strength (RS)
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="p-4 glass-card text-center h-100">
+                    <small class="text-muted d-block mb-2">RS vs Subsector</small>
+                    {% if instrument.rs_vs_subsector is not none %}
+                        {% if instrument.rs_vs_subsector > 1.0 %}
+                            <h2 class="mb-0 text-success">{{ "%.2f"|format(instrument.rs_vs_subsector) }}</h2>
+                            <small class="badge bg-success mt-2">Outperforming</small>
+                        {% elif instrument.rs_vs_subsector < 1.0 %}
+                            <h2 class="mb-0 text-danger">{{ "%.2f"|format(instrument.rs_vs_subsector) }}</h2>
+                            <small class="badge bg-danger mt-2">Underperforming</small>
+                        {% else %}
+                            <h2 class="mb-0 text-secondary">{{ "%.2f"|format(instrument.rs_vs_subsector) }}</h2>
+                            <small class="badge bg-secondary mt-2">Equal</small>
+                        {% endif %}
+                        {% if instrument.sub_sector_obj %}
+                            <div class="mt-2">
+                                <small class="text-muted">vs {{ instrument.sub_sector_obj.name }}</small>
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <h2 class="mb-0 text-muted">--</h2>
+                        <small class="text-muted">Not calculated</small>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="p-4 glass-card text-center h-100">
+                    <small class="text-muted d-block mb-2">RS vs Sector</small>
+                    {% if instrument.rs_vs_sector is not none %}
+                        {% if instrument.rs_vs_sector > 1.0 %}
+                            <h2 class="mb-0 text-success">{{ "%.2f"|format(instrument.rs_vs_sector) }}</h2>
+                            <small class="badge bg-success mt-2">Outperforming</small>
+                        {% elif instrument.rs_vs_sector < 1.0 %}
+                            <h2 class="mb-0 text-danger">{{ "%.2f"|format(instrument.rs_vs_sector) }}</h2>
+                            <small class="badge bg-danger mt-2">Underperforming</small>
+                        {% else %}
+                            <h2 class="mb-0 text-secondary">{{ "%.2f"|format(instrument.rs_vs_sector) }}</h2>
+                            <small class="badge bg-secondary mt-2">Equal</small>
+                        {% endif %}
+                        {% if instrument.sub_sector_obj %}
+                            <div class="mt-2">
+                                <small class="text-muted">vs {{ instrument.sub_sector_obj.sector.name }}</small>
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <h2 class="mb-0 text-muted">--</h2>
+                        <small class="text-muted">Not calculated</small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% if instrument.rs_base_date %}
+        <div class="alert alert-light mt-3 mb-0">
+            <small>
+                <i class="bi bi-info-circle me-1"></i>
+                <strong>Base Date:</strong> {{ instrument.rs_base_date.strftime('%B %d, %Y') }}
+                {% if instrument.rs_updated_at %}
+                    | <strong>Last Updated:</strong> {{ instrument.rs_updated_at.strftime('%B %d, %Y %I:%M %p') }}
+                {% endif %}
+            </small>
+        </div>
+        {% endif %}
+        <div class="mt-3 small text-muted">
+            <strong>How to interpret RS:</strong><br>
+            RS > 1.0: Stock is outperforming the index<br>
+            RS < 1.0: Stock is underperforming the index<br>
+            RS = 1.0: Stock is performing equally with the index
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Stock Details -->
 <div class="row g-4">
     <div class="col-lg-8">

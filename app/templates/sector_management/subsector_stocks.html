@@ -189,6 +189,8 @@
                         <th>Last Price</th>
                         <th>% Change</th>
                         <th>Stage</th>
+                        <th>RS_SUB</th>
+                        <th>RS_SEC</th>
                         <th class="text-end">Actions</th>
                     </tr>
                 </thead>
@@ -255,6 +257,44 @@
                                 {% endif %}
                                 {% if stock.stage_confidence %}
                                     <br><small class="text-muted">{{ "%.0f"|format(stock.stage_confidence) }}%</small>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">--</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if stock.rs_vs_subsector is not none %}
+                                {% if stock.rs_vs_subsector > 1.0 %}
+                                    <span class="badge bg-success" title="Outperforming subsector">
+                                        {{ "%.1f"|format(stock.rs_vs_subsector) }}
+                                    </span>
+                                {% elif stock.rs_vs_subsector < 1.0 %}
+                                    <span class="badge bg-danger" title="Underperforming subsector">
+                                        {{ "%.1f"|format(stock.rs_vs_subsector) }}
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-secondary" title="Equal to subsector">
+                                        {{ "%.1f"|format(stock.rs_vs_subsector) }}
+                                    </span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">--</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if stock.rs_vs_sector is not none %}
+                                {% if stock.rs_vs_sector > 1.0 %}
+                                    <span class="badge bg-success" title="Outperforming sector">
+                                        {{ "%.1f"|format(stock.rs_vs_sector) }}
+                                    </span>
+                                {% elif stock.rs_vs_sector < 1.0 %}
+                                    <span class="badge bg-danger" title="Underperforming sector">
+                                        {{ "%.1f"|format(stock.rs_vs_sector) }}
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-secondary" title="Equal to sector">
+                                        {{ "%.1f"|format(stock.rs_vs_sector) }}
+                                    </span>
                                 {% endif %}
                             {% else %}
                                 <span class="text-muted">--</span>

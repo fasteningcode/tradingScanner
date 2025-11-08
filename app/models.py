@@ -219,6 +219,20 @@ class Instrument(db.Model):
     stage_updated_at = db.Column(db.DateTime, nullable=True)  # When stage was last calculated
     stage_confidence = db.Column(db.Float, nullable=True)  # 0-100 confidence score
 
+    # Relative Strength (RS) fields
+    rs_vs_subsector = db.Column(db.Float, nullable=True, index=True)  # RS relative to subsector index
+    rs_vs_sector = db.Column(db.Float, nullable=True, index=True)  # RS relative to sector index
+    rs_base_date = db.Column(db.Date, nullable=True)  # Base date used for RS calculation
+    rs_updated_at = db.Column(db.DateTime, nullable=True)  # When RS was last calculated
+
+    # Volume Dry-Up Analysis fields
+    volume_dryup_status = db.Column(db.String(20), nullable=True, index=True)  # 'qualified', 'not_qualified', null
+    volume_ratio_pct = db.Column(db.Float, nullable=True, index=True)  # Current volume as % of 20-day avg
+    consolidation_5d_pct = db.Column(db.Float, nullable=True)  # 5-day price consolidation range %
+    volume_dryup_updated_at = db.Column(db.DateTime, nullable=True)  # When analysis was last run
+    volume_dryup_classification = db.Column(db.String(20), nullable=True)  # 'extreme', 'strong', 'good', 'moderate'
+    volume_declining_days = db.Column(db.Integer, nullable=True)  # Count of declining volume days (out of 9)
+
     # Timestamps
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -1068,6 +1082,67 @@ class StockStageAnalysisTask(db.Model):
         }
 
 
+class RSCalculationTask(db.Model):
+    """Model for tracking Relative Strength calculation tasks"""
+
+    __tablename__ = 'rs_calculation_tasks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+
+    # RS Configuration
+    base_date = db.Column(db.Date, nullable=False)  # Base date for RS calculation
+
+    # Progress tracking
+    status = db.Column(db.String(20), default='pending', nullable=False, index=True)  # 'pending', 'running', 'completed', 'failed', 'cancelled'
+    progress_percentage = db.Column(db.Float, default=0.0)
+    total_stocks = db.Column(db.Integer, default=0)
+    processed_stocks = db.Column(db.Integer, default=0)
+    failed_stocks = db.Column(db.Integer, default=0)
+    skipped_stocks = db.Column(db.Integer, default=0)  # Missing data or no sector assignment
+    current_stock_symbol = db.Column(db.String(50), nullable=True)
+
+    # Timestamps
+    started_at = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Error handling
+    error_message = db.Column(db.Text, nullable=True)
+
+    # Relationships
+    user = db.relationship('User', backref=db.backref('rs_calculation_tasks', lazy='dynamic', cascade='all, delete-orphan'))
+
+    def __repr__(self):
+        return f'<RSCalculationTask {self.id} User:{self.user_id} Status:{self.status}>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        # Calculate ETA if running
+        eta_seconds = None
+        if self.status == 'running' and self.processed_stocks > 0 and self.started_at:
+            elapsed = (datetime.utcnow() - self.started_at).total_seconds()
+            avg_time_per_stock = elapsed / self.processed_stocks
+            remaining_stocks = self.total_stocks - self.processed_stocks
+            eta_seconds = int(avg_time_per_stock * remaining_stocks)
+
+        return {
+            'id': self.id,
+            'base_date': self.base_date.isoformat() if self.base_date else None,
+            'status': self.status,
+            'progress_percentage': round(self.progress_percentage, 2),
+            'total_stocks': self.total_stocks,
+            'processed_stocks': self.processed_stocks,
+            'failed_stocks': self.failed_stocks,
+            'skipped_stocks': self.skipped_stocks,
+            'current_stock_symbol': self.current_stock_symbol,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'error_message': self.error_message,
+            'eta_seconds': eta_seconds
+        }
+
+
 class SectorIndex(db.Model):
     """Model for storing calculated sector/subsector indices"""
 
@@ -1165,6 +1240,169 @@ class IndexHistory(db.Model):
             'index_calculated_date': self.index_calculated_date.isoformat() if self.index_calculated_date else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+class ScannerProfile(db.Model):
+    """Scanner profiles for saving scan configurations"""
+
+    __tablename__ = 'scanner_profiles'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    criteria = db.Column(db.Text, nullable=True)  # JSON string for scan criteria (to be defined later)
+    is_default = db.Column(db.Boolean, default=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = db.relationship('User', backref=db.backref('scanner_profiles', lazy='dynamic', cascade='all, delete-orphan'))
+    scan_tasks = db.relationship('ScannerTask', back_populates='profile', cascade='all, delete-orphan')
+
+    # Table constraints
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'name', name='uq_user_profile_name'),
+        db.Index('idx_profile_lookup', 'user_id', 'is_default'),
+    )
+
+    def __repr__(self):
+        return f'<ScannerProfile {self.name} User:{self.user_id}>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'criteria': self.criteria,
+            'is_default': self.is_default,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+class ScannerTask(db.Model):
+    """Model for tracking scanner task execution"""
+
+    __tablename__ = 'scanner_tasks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    profile_id = db.Column(db.Integer, db.ForeignKey('scanner_profiles.id'), nullable=True, index=True)
+
+    # Progress tracking
+    status = db.Column(db.String(20), default='pending', nullable=False, index=True)  # 'pending', 'running', 'completed', 'failed', 'cancelled'
+    progress_percentage = db.Column(db.Float, default=0.0)
+    total_stocks = db.Column(db.Integer, default=0)
+    scanned_stocks = db.Column(db.Integer, default=0)
+    matched_stocks = db.Column(db.Integer, default=0)  # Stocks that passed the criteria
+    failed_stocks = db.Column(db.Integer, default=0)
+    current_stock_symbol = db.Column(db.String(50), nullable=True)
+
+    # Timestamps
+    started_at = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Error handling
+    error_message = db.Column(db.Text, nullable=True)
+
+    # Relationships
+    user = db.relationship('User', backref=db.backref('scanner_tasks', lazy='dynamic', cascade='all, delete-orphan'))
+    profile = db.relationship('ScannerProfile', back_populates='scan_tasks')
+
+    def __repr__(self):
+        return f'<ScannerTask {self.id} User:{self.user_id} Status:{self.status}>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        # Calculate ETA if running
+        eta_seconds = None
+        if self.status == 'running' and self.scanned_stocks > 0 and self.started_at:
+            elapsed = (datetime.utcnow() - self.started_at).total_seconds()
+            avg_time_per_stock = elapsed / self.scanned_stocks
+            remaining_stocks = self.total_stocks - self.scanned_stocks
+            eta_seconds = int(avg_time_per_stock * remaining_stocks)
+
+        return {
+            'id': self.id,
+            'profile_id': self.profile_id,
+            'status': self.status,
+            'progress_percentage': round(self.progress_percentage, 2),
+            'total_stocks': self.total_stocks,
+            'scanned_stocks': self.scanned_stocks,
+            'matched_stocks': self.matched_stocks,
+            'failed_stocks': self.failed_stocks,
+            'current_stock_symbol': self.current_stock_symbol,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'error_message': self.error_message,
+            'eta_seconds': eta_seconds
+        }
+
+
+class VolumeDryUpTask(db.Model):
+    """Model for tracking volume dry-up analysis tasks"""
+
+    __tablename__ = 'volume_dryup_tasks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+
+    # Configuration
+    min_volume_pct = db.Column(db.Float, default=50.0, nullable=False)  # Volume must be < this % of 20-day avg
+    max_consolidation_pct = db.Column(db.Float, default=6.0, nullable=False)  # 5-day range must be < this %
+
+    # Progress tracking
+    status = db.Column(db.String(20), default='pending', nullable=False, index=True)  # 'pending', 'running', 'completed', 'failed', 'cancelled'
+    progress_percentage = db.Column(db.Float, default=0.0)
+    total_stocks = db.Column(db.Integer, default=0)
+    analyzed_stocks = db.Column(db.Integer, default=0)
+    qualified_stocks = db.Column(db.Integer, default=0)  # Stocks that passed both criteria
+    failed_stocks = db.Column(db.Integer, default=0)
+    current_stock_symbol = db.Column(db.String(50), nullable=True)
+
+    # Timestamps
+    started_at = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Error handling
+    error_message = db.Column(db.Text, nullable=True)
+
+    # Relationships
+    user = db.relationship('User', backref=db.backref('volume_dryup_tasks', lazy='dynamic', cascade='all, delete-orphan'))
+
+    def __repr__(self):
+        return f'<VolumeDryUpTask {self.id} User:{self.user_id} Status:{self.status}>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        # Calculate ETA if running
+        eta_seconds = None
+        if self.status == 'running' and self.analyzed_stocks > 0 and self.started_at:
+            elapsed = (datetime.utcnow() - self.started_at).total_seconds()
+            avg_time_per_stock = elapsed / self.analyzed_stocks
+            remaining_stocks = self.total_stocks - self.analyzed_stocks
+            eta_seconds = int(avg_time_per_stock * remaining_stocks)
+
+        return {
+            'id': self.id,
+            'min_volume_pct': self.min_volume_pct,
+            'max_consolidation_pct': self.max_consolidation_pct,
+            'status': self.status,
+            'progress_percentage': round(self.progress_percentage, 2),
+            'total_stocks': self.total_stocks,
+            'analyzed_stocks': self.analyzed_stocks,
+            'qualified_stocks': self.qualified_stocks,
+            'failed_stocks': self.failed_stocks,
+            'current_stock_symbol': self.current_stock_symbol,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'error_message': self.error_message,
+            'eta_seconds': eta_seconds
         }
 
 

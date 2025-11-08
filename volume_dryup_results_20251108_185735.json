@@ -1,0 +1,53 @@
+[
+  {
+    "symbol": "ANANDRATHI",
+    "current_price": 3128.1,
+    "current_volume": 116561,
+    "avg_volume_20d": 561301,
+    "volume_ratio_pct": 20.8,
+    "price_range_5d_pct": 3.51,
+    "distance_from_52w_high_pct": 5.82,
+    "last_5_volumes": [
+      119388,
+      112898,
+      178488,
+      129581,
+      116561
+    ],
+    "last_date": "2025-11-07"
+  },
+  {
+    "symbol": "NESTLEIND",
+    "current_price": 1262.8,
+    "current_volume": 594859,
+    "avg_volume_20d": 1489638,
+    "volume_ratio_pct": 39.9,
+    "price_range_5d_pct": 2.66,
+    "distance_from_52w_high_pct": 3.72,
+    "last_5_volumes": [
+      943037,
+      847050,
+      770668,
+      1171263,
+      594859
+    ],
+    "last_date": "2025-11-07"
+  },
+  {
+    "symbol": "ASHOKLEY",
+    "current_price": 141.32,
+    "current_volume": 4804583,
+    "avg_volume_20d": 10461778,
+    "volume_ratio_pct": 45.9,
+    "price_range_5d_pct": 4.16,
+    "distance_from_52w_high_pct": 2.2,
+    "last_5_volumes": [
+      18213013,
+      8798368,
+      8502046,
+      17435511,
+      4804583
+    ],
+    "last_date": "2025-11-07"
+  }
+]

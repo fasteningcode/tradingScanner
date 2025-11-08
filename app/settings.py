@@ -1,12 +1,12 @@
 import os
 import shutil
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from flask import Blueprint, render_template, redirect, url_for, flash, request, send_file, current_app, session, jsonify
 from flask_login import login_required, current_user, logout_user
 from werkzeug.utils import secure_filename
 from app import db
-from app.models import User, HistoricalDataSettings, HistoricalData, DownloadTask, DownloadLog, Instrument, StockInformation, MarketCapFetchTask, StockStageAnalysisTask
+from app.models import User, HistoricalDataSettings, HistoricalData, DownloadTask, DownloadLog, Instrument, StockInformation, MarketCapFetchTask, StockStageAnalysisTask, RSCalculationTask, VolumeDryUpTask
 from app.forms import BackupForm, RestoreDatabaseForm, EmergencyRestoreForm, KiteCredentialsForm
 from app.kite_auth import get_kite_client
 from app import marketcap_service
@@ -55,7 +55,8 @@ def index(tab='general'):
                          backup_form=backup_form,
                          restore_form=restore_form,
                          kite_form=kite_form,
-                         historical_settings=historical_settings)
+                         historical_settings=historical_settings,
+                         today=date.today())
 
 
 @settings_bp.route('/backup', methods=['POST'])
@@ -1816,3 +1817,357 @@ def cancel_stock_stage_analysis(task_id):
             'success': False,
             'error': str(e)
         }), 500
+
+
+# ==================== Relative Strength Calculation Routes ====================
+
+@settings_bp.route('/relative-strength/run', methods=['POST'])
+@login_required
+def run_rs_calculation():
+    """Start a new RS calculation task"""
+    try:
+        from datetime import datetime
+        from app.rs_calculation_service import start_rs_calculation
+
+        # Get base_date from request
+        data = request.get_json() or {}
+        base_date_str = data.get('base_date')
+
+        if not base_date_str:
+            return jsonify({
+                'success': False,
+                'error': 'base_date is required (format: YYYY-MM-DD)'
+            }), 400
+
+        # Parse base_date
+        try:
+            base_date = datetime.strptime(base_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid date format. Use YYYY-MM-DD'
+            }), 400
+
+        # Validate base_date is not in the future
+        from datetime import date
+        if base_date > date.today():
+            return jsonify({
+                'success': False,
+                'error': 'Base date cannot be in the future'
+            }), 400
+
+        current_app.logger.info(f'Starting RS calculation for user {current_user.id} with base_date={base_date}')
+
+        # Start RS calculation task
+        task_id = start_rs_calculation(
+            current_user.id,
+            base_date=base_date,
+            app=current_app._get_current_object()
+        )
+
+        if task_id:
+            return jsonify({
+                'success': True,
+                'message': 'RS calculation started successfully',
+                'task_id': task_id
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to start RS calculation'
+            }), 500
+
+    except Exception as e:
+        current_app.logger.error(f'Error starting RS calculation: {str(e)}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/relative-strength/status', methods=['GET'])
+@login_required
+def rs_calculation_status():
+    """Get status of current RS calculation task"""
+    try:
+        from app.rs_calculation_service import get_rs_calculation_status
+
+        status = get_rs_calculation_status(current_user.id)
+
+        return jsonify({
+            'success': True,
+            'status': status
+        })
+
+    except Exception as e:
+        current_app.logger.error(f'Error getting RS calculation status: {str(e)}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/relative-strength/cancel/<int:task_id>', methods=['POST'])
+@login_required
+def cancel_rs_calculation(task_id):
+    """Cancel a running RS calculation task"""
+    try:
+        from app.rs_calculation_service import cancel_rs_calculation as cancel_task
+
+        # Verify task belongs to current user
+        task = RSCalculationTask.query.get(task_id)
+        if not task:
+            return jsonify({
+                'success': False,
+                'error': 'Task not found'
+            }), 404
+
+        if task.user_id != current_user.id:
+            return jsonify({
+                'success': False,
+                'error': 'Unauthorized'
+            }), 403
+
+        success = cancel_task(task_id)
+
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'RS calculation cancelled successfully'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to cancel task'
+            }), 400
+
+    except Exception as e:
+        current_app.logger.error(f'Error cancelling RS calculation: {str(e)}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ============================================================================
+# Volume Dry-Up Analysis Routes
+# ============================================================================
+
+@settings_bp.route('/volume-dryup/run', methods=['POST'])
+@login_required
+def run_volume_dryup_analysis():
+    """Start volume dry-up analysis task"""
+    try:
+        from app.volume_dryup_service import start_volume_dryup_analysis
+
+        # Get configuration from request
+        data = request.get_json() or {}
+        min_volume_pct = float(data.get('min_volume_pct', 50.0))
+        max_consolidation_pct = float(data.get('max_consolidation_pct', 6.0))
+
+        # Validate parameters
+        if min_volume_pct < 20 or min_volume_pct > 80:
+            return jsonify({
+                'success': False,
+                'error': 'Volume threshold must be between 20% and 80%'
+            }), 400
+
+        if max_consolidation_pct < 2 or max_consolidation_pct > 15:
+            return jsonify({
+                'success': False,
+                'error': 'Consolidation threshold must be between 2% and 15%'
+            }), 400
+
+        # Start analysis
+        task_id = start_volume_dryup_analysis(
+            current_user.id,
+            min_volume_pct=min_volume_pct,
+            max_consolidation_pct=max_consolidation_pct,
+            app=current_app._get_current_object()
+        )
+
+        if task_id:
+            return jsonify({
+                'success': True,
+                'message': 'Volume dry-up analysis started successfully',
+                'task_id': task_id
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to start volume dry-up analysis'
+            }), 500
+
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': f'Invalid parameter: {str(e)}'
+        }), 400
+    except Exception as e:
+        current_app.logger.error(f'Error starting volume dry-up analysis: {str(e)}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/volume-dryup/status', methods=['GET'])
+@login_required
+def volume_dryup_status():
+    """Get status of volume dry-up analysis task"""
+    try:
+        from app.volume_dryup_service import get_volume_dryup_status
+
+        status = get_volume_dryup_status(current_user.id)
+
+        return jsonify({
+            'success': True,
+            'status': status
+        })
+
+    except Exception as e:
+        current_app.logger.error(f'Error getting volume dry-up status: {str(e)}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/volume-dryup/cancel/<int:task_id>', methods=['POST'])
+@login_required
+def cancel_volume_dryup_analysis(task_id):
+    """Cancel a running volume dry-up analysis task"""
+    try:
+        from app.volume_dryup_service import cancel_volume_dryup_analysis as cancel_task
+
+        # Verify task belongs to current user
+        task = VolumeDryUpTask.query.get(task_id)
+        if not task:
+            return jsonify({
+                'success': False,
+                'error': 'Task not found'
+            }), 404
+
+        if task.user_id != current_user.id:
+            return jsonify({
+                'success': False,
+                'error': 'Unauthorized'
+            }), 403
+
+        success = cancel_task(task_id)
+
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Volume dry-up analysis cancelled successfully'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to cancel task'
+            }), 400
+
+    except Exception as e:
+        current_app.logger.error(f'Error cancelling volume dry-up analysis: {str(e)}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/volume-dryup/results', methods=['GET'])
+@login_required
+def volume_dryup_results():
+    """Get qualified stocks from volume dry-up analysis"""
+    try:
+        from app.volume_dryup_service import get_qualified_stocks
+
+        # Get filter parameters
+        filters = {}
+        if request.args.get('stage'):
+            filters['stage'] = int(request.args.get('stage'))
+        if request.args.get('classification'):
+            filters['classification'] = request.args.get('classification')
+
+        stocks = get_qualified_stocks(current_user.id, filters)
+
+        return jsonify({
+            'success': True,
+            'stocks': stocks,
+            'count': len(stocks)
+        })
+
+    except Exception as e:
+        current_app.logger.error(f'Error getting volume dry-up results: {str(e)}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/volume-dryup/results/view', methods=['GET'])
+@login_required
+def volume_dryup_results_view():
+    """Display volume dry-up results in a user-friendly page"""
+    try:
+        # Get last completed task
+        last_task = VolumeDryUpTask.query.filter_by(
+            user_id=current_user.id,
+            status='completed'
+        ).order_by(VolumeDryUpTask.completed_at.desc()).first()
+
+        # Get filter parameters
+        filter_classification = request.args.get('classification', '')
+        filter_stage = request.args.get('stage', type=int)
+        sort_by = request.args.get('sort', 'volume_ratio')
+
+        # Build query for qualified stocks
+        query = Instrument.query.filter_by(volume_dryup_status='qualified')
+
+        # Apply filters
+        if filter_classification:
+            query = query.filter_by(volume_dryup_classification=filter_classification)
+
+        if filter_stage:
+            query = query.filter_by(current_stage=filter_stage)
+
+        # Apply sorting
+        if sort_by == 'consolidation':
+            query = query.order_by(Instrument.consolidation_5d_pct.asc())
+        elif sort_by == 'classification':
+            # Order by classification: extreme, strong, good, moderate
+            query = query.order_by(
+                db.case(
+                    (Instrument.volume_dryup_classification == 'extreme', 1),
+                    (Instrument.volume_dryup_classification == 'strong', 2),
+                    (Instrument.volume_dryup_classification == 'good', 3),
+                    (Instrument.volume_dryup_classification == 'moderate', 4),
+                    else_=5
+                )
+            )
+        else:  # volume_ratio (default)
+            query = query.order_by(Instrument.volume_ratio_pct.asc())
+
+        stocks = query.all()
+
+        # Calculate summary statistics
+        qualified_count = len(stocks)
+        extreme_count = sum(1 for s in stocks if s.volume_dryup_classification == 'extreme')
+        strong_count = sum(1 for s in stocks if s.volume_dryup_classification == 'strong')
+        stage2_count = sum(1 for s in stocks if s.current_stage == 2)
+
+        return render_template('settings/volume_dryup_results.html',
+                             stocks=stocks,
+                             last_analysis=last_task,
+                             qualified_count=qualified_count,
+                             extreme_count=extreme_count,
+                             strong_count=strong_count,
+                             stage2_count=stage2_count,
+                             filter_classification=filter_classification,
+                             filter_stage=filter_stage,
+                             sort_by=sort_by)
+
+    except Exception as e:
+        current_app.logger.error(f'Error displaying volume dry-up results: {str(e)}', exc_info=True)
+        flash(f'Error loading results: {str(e)}', 'error')
+        return redirect(url_for('settings.index'))

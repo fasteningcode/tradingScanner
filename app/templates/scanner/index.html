@@ -1,38 +1,564 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-8 text-center">
-        <div class="card card-modern shadow-lg">
-            <div class="card-body py-5">
-                <div class="mb-4">
-                    <i class="bi bi-search display-1 text-muted"></i>
+<div class="row">
+    <div class="col-12">
+        <h1 class="h2 mb-4">
+            <i class="bi bi-search text-primary me-2"></i> Stock Scanner
+        </h1>
+    </div>
+</div>
+
+<!-- Alert Container for Flash Messages -->
+<div id="alertContainer"></div>
+
+<!-- Tab Navigation -->
+<ul class="nav nav-tabs" id="scannerTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link {{ 'active' if active_tab == 'scanner' else '' }}"
+                id="scanner-tab"
+                data-bs-toggle="tab"
+                data-bs-target="#scanner"
+                type="button"
+                role="tab"
+                aria-controls="scanner"
+                aria-selected="{{ 'true' if active_tab == 'scanner' else 'false' }}">
+            <i class="bi bi-search me-2"></i>Scanner
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link {{ 'active' if active_tab == 'profiles' else '' }}"
+                id="profiles-tab"
+                data-bs-toggle="tab"
+                data-bs-target="#profiles"
+                type="button"
+                role="tab"
+                aria-controls="profiles"
+                aria-selected="{{ 'true' if active_tab == 'profiles' else 'false' }}">
+            <i class="bi bi-gear me-2"></i>Profiles
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link {{ 'active' if active_tab == 'results' else '' }}"
+                id="results-tab"
+                data-bs-toggle="tab"
+                data-bs-target="#results"
+                type="button"
+                role="tab"
+                aria-controls="results"
+                aria-selected="{{ 'true' if active_tab == 'results' else 'false' }}">
+            <i class="bi bi-list-check me-2"></i>Results History
+        </button>
+    </li>
+</ul>
+
+<!-- Tab Content -->
+<div class="tab-content mt-4" id="scannerTabContent">
+
+    <!-- Scanner Tab -->
+    <div class="tab-pane fade {{ 'show active' if active_tab == 'scanner' else '' }}"
+         id="scanner"
+         role="tabpanel"
+         aria-labelledby="scanner-tab">
+
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-play-circle me-2"></i>Run Scanner
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        {% if profiles %}
+                            <div class="mb-3">
+                                <label for="profileSelect" class="form-label">Select Scanner Profile</label>
+                                <select class="form-select" id="profileSelect">
+                                    {% for profile in profiles %}
+                                        <option value="{{ profile.id }}" {{ 'selected' if profile.is_default else '' }}>
+                                            {{ profile.name }}{% if profile.is_default %} (Default){% endif %}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <small class="form-text text-muted">
+                                    Choose a profile with scan criteria. Actual scanning criteria will be configured later.
+                                </small>
+                            </div>
+
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-primary btn-lg" id="startScanBtn" onclick="startScan()">
+                                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style="display: none;" id="scanSpinner"></span>
+                                    <i class="bi bi-play-fill me-2" id="scanIcon"></i>
+                                    <span id="scanText">Start Scan</span>
+                                </button>
+                            </div>
+                        {% else %}
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i>
+                                No scanner profiles found. Please create a profile first in the Profiles tab.
+                            </div>
+                            <a href="{{ url_for('scanner.create_profile') }}" class="btn btn-primary">
+                                <i class="bi bi-plus-circle me-2"></i>Create Profile
+                            </a>
+                        {% endif %}
+                    </div>
                 </div>
-                <h1 class="display-4 mb-3">Stock Scanner</h1>
-                <p class="lead text-muted mb-4">
-                    Coming Soon
-                </p>
-                <p class="text-muted">
-                    The stock scanner feature is currently under development.
-                    This will allow you to scan and filter stocks based on various technical and fundamental criteria.
-                </p>
-                <hr class="my-4">
-                <p class="text-muted small mb-0">
-                    In the meantime, you can:
-                </p>
-                <div class="d-flex justify-content-center gap-3 mt-3">
-                    <a href="{{ url_for('stocks.index') }}" class="btn btn-outline-primary">
-                        <i class="bi bi-graph-up me-2"></i>Browse Stocks
-                    </a>
-                    <a href="{{ url_for('sectors.index') }}" class="btn btn-outline-primary">
-                        <i class="bi bi-pie-chart me-2"></i>View Sectors
-                    </a>
-                    <a href="{{ url_for('sector_management.index') }}" class="btn btn-outline-primary">
-                        <i class="bi bi-gear-fill me-2"></i>Manage Sectors
-                    </a>
+
+                <!-- Scan Progress -->
+                <div class="card shadow-sm mt-3" id="progressCard" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-hourglass-split me-2"></i>Scan Progress
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span id="progressText">Initializing...</span>
+                                <span id="progressPercentage">0%</span>
+                            </div>
+                            <div class="progress" style="height: 25px;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                     role="progressbar"
+                                     id="progressBar"
+                                     style="width: 0%"
+                                     aria-valuenow="0"
+                                     aria-valuemin="0"
+                                     aria-valuemax="100">
+                                    0%
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row text-center mt-3">
+                            <div class="col-4">
+                                <h4 class="mb-0 text-primary" id="scannedCount">0</h4>
+                                <small class="text-muted">Scanned</small>
+                            </div>
+                            <div class="col-4">
+                                <h4 class="mb-0 text-success" id="matchedCount">0</h4>
+                                <small class="text-muted">Matched</small>
+                            </div>
+                            <div class="col-4">
+                                <h4 class="mb-0 text-danger" id="failedCount">0</h4>
+                                <small class="text-muted">Failed</small>
+                            </div>
+                        </div>
+
+                        <div class="mt-3" id="currentStockDiv" style="display: none;">
+                            <small class="text-muted">Current: <strong id="currentStock">--</strong></small>
+                        </div>
+
+                        <div class="mt-3">
+                            <button class="btn btn-danger btn-sm" id="cancelScanBtn" onclick="cancelScan()" style="display: none;">
+                                <i class="bi bi-x-circle me-2"></i>Cancel Scan
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-info-circle me-2"></i>About Scanner
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="small">The stock scanner allows you to filter stocks based on various criteria.</p>
+
+                        <div class="alert alert-warning small">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            <strong>Note:</strong> Scanning criteria will be configured in upcoming updates. Currently, the scanner framework is ready for customization.
+                        </div>
+
+                        <h6 class="mt-3">Quick Guide:</h6>
+                        <ol class="small">
+                            <li>Create a scanner profile in the Profiles tab</li>
+                            <li>Select the profile and click "Start Scan"</li>
+                            <li>View results in the Results History tab</li>
+                        </ol>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Profiles Tab -->
+    <div class="tab-pane fade {{ 'show active' if active_tab == 'profiles' else '' }}"
+         id="profiles"
+         role="tabpanel"
+         aria-labelledby="profiles-tab">
+
+        <div class="mb-3">
+            <a href="{{ url_for('scanner.create_profile') }}" class="btn btn-primary">
+                <i class="bi bi-plus-circle me-2"></i>Create New Profile
+            </a>
+        </div>
+
+        {% if profiles %}
+            <div class="row">
+                {% for profile in profiles %}
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card shadow-sm h-100 {% if profile.is_default %}border-primary{% endif %}">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h5 class="card-title mb-0">
+                                        {{ profile.name }}
+                                        {% if profile.is_default %}
+                                            <span class="badge bg-primary ms-2">Default</span>
+                                        {% endif %}
+                                    </h5>
+                                </div>
+
+                                {% if profile.description %}
+                                    <p class="card-text text-muted small">{{ profile.description }}</p>
+                                {% else %}
+                                    <p class="card-text text-muted small fst-italic">No description</p>
+                                {% endif %}
+
+                                <div class="mt-3">
+                                    <small class="text-muted">
+                                        Created: {{ profile.created_at.strftime('%d %b %Y') }}
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="card-footer bg-transparent">
+                                <div class="btn-group w-100" role="group">
+                                    <a href="{{ url_for('scanner.edit_profile', profile_id=profile.id) }}"
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+
+                                    {% if not profile.is_default %}
+                                        <form action="{{ url_for('scanner.set_default_profile', profile_id=profile.id) }}"
+                                              method="post"
+                                              class="d-inline">
+                                            <button type="submit" class="btn btn-sm btn-outline-success" title="Set as Default">
+                                                <i class="bi bi-star"></i>
+                                            </button>
+                                        </form>
+                                    {% endif %}
+
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-danger"
+                                            onclick="confirmDelete({{ profile.id }}, '{{ profile.name }}')">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                No scanner profiles found. Create your first profile to get started!
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Results History Tab -->
+    <div class="tab-pane fade {{ 'show active' if active_tab == 'results' else '' }}"
+         id="results"
+         role="tabpanel"
+         aria-labelledby="results-tab">
+
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-clock-history me-2"></i>Scan History
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if recent_tasks %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Profile</th>
+                                    <th>Status</th>
+                                    <th>Progress</th>
+                                    <th>Matched</th>
+                                    <th>Duration</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for task in recent_tasks %}
+                                    <tr>
+                                        <td>
+                                            <small>{{ task.created_at.strftime('%d %b %Y %I:%M %p') }}</small>
+                                        </td>
+                                        <td>
+                                            {% if task.profile %}
+                                                {{ task.profile.name }}
+                                            {% else %}
+                                                <span class="text-muted">--</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if task.status == 'completed' %}
+                                                <span class="badge bg-success">Completed</span>
+                                            {% elif task.status == 'running' %}
+                                                <span class="badge bg-primary">Running</span>
+                                            {% elif task.status == 'failed' %}
+                                                <span class="badge bg-danger">Failed</span>
+                                            {% elif task.status == 'cancelled' %}
+                                                <span class="badge bg-warning">Cancelled</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">{{ task.status.title() }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <small>{{ task.scanned_stocks }} / {{ task.total_stocks }}</small>
+                                        </td>
+                                        <td>
+                                            <strong class="text-success">{{ task.matched_stocks }}</strong>
+                                        </td>
+                                        <td>
+                                            {% if task.started_at and task.completed_at %}
+                                                {% set duration = (task.completed_at - task.started_at).total_seconds() %}
+                                                <small>{{ "%.1f"|format(duration) }}s</small>
+                                            {% else %}
+                                                <span class="text-muted">--</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        No scan history found. Run your first scan to see results here!
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
 </div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to delete the profile "<strong id="deleteProfileName"></strong>"?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="post" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+    let progressInterval = null;
+    let currentTaskId = null;
+
+    // Start Scan
+    async function startScan() {
+        const profileSelect = document.getElementById('profileSelect');
+        if (!profileSelect) return;
+
+        const profileId = profileSelect.value;
+        if (!profileId) {
+            showAlert('warning', 'Please select a scanner profile');
+            return;
+        }
+
+        const btn = document.getElementById('startScanBtn');
+        const spinner = document.getElementById('scanSpinner');
+        const icon = document.getElementById('scanIcon');
+        const text = document.getElementById('scanText');
+
+        // Update button state
+        btn.disabled = true;
+        spinner.style.display = 'inline-block';
+        icon.style.display = 'none';
+        text.textContent = 'Starting...';
+
+        try {
+            const response = await fetch('/scanner/scan/start', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({ profile_id: parseInt(profileId) })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showAlert('success', data.message);
+                currentTaskId = data.task_id;
+                document.getElementById('progressCard').style.display = 'block';
+                document.getElementById('cancelScanBtn').style.display = 'inline-block';
+                startProgressPolling();
+            } else {
+                showAlert('danger', data.error || 'Failed to start scan');
+                resetScanButton();
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showAlert('danger', 'An error occurred while starting the scan');
+            resetScanButton();
+        }
+    }
+
+    // Reset Scan Button
+    function resetScanButton() {
+        const btn = document.getElementById('startScanBtn');
+        const spinner = document.getElementById('scanSpinner');
+        const icon = document.getElementById('scanIcon');
+        const text = document.getElementById('scanText');
+
+        btn.disabled = false;
+        spinner.style.display = 'none';
+        icon.style.display = 'inline';
+        text.textContent = 'Start Scan';
+    }
+
+    // Start Progress Polling
+    function startProgressPolling() {
+        progressInterval = setInterval(updateProgress, 2000);
+        updateProgress(); // Immediate first update
+    }
+
+    // Update Progress
+    async function updateProgress() {
+        try {
+            const response = await fetch('/scanner/scan/status');
+            const data = await response.json();
+
+            if (data.success && data.status) {
+                const status = data.status;
+
+                // Update progress bar
+                const progress = status.progress_percentage || 0;
+                const progressBar = document.getElementById('progressBar');
+                const progressPercentage = document.getElementById('progressPercentage');
+
+                progressBar.style.width = progress + '%';
+                progressBar.setAttribute('aria-valuenow', progress);
+                progressBar.textContent = progress.toFixed(1) + '%';
+                progressPercentage.textContent = progress.toFixed(1) + '%';
+
+                // Update counts
+                document.getElementById('scannedCount').textContent = status.scanned_stocks || 0;
+                document.getElementById('matchedCount').textContent = status.matched_stocks || 0;
+                document.getElementById('failedCount').textContent = status.failed_stocks || 0;
+
+                // Update current stock
+                if (status.current_stock_symbol) {
+                    document.getElementById('currentStockDiv').style.display = 'block';
+                    document.getElementById('currentStock').textContent = status.current_stock_symbol;
+                }
+
+                // Update progress text
+                document.getElementById('progressText').textContent =
+                    `Scanning ${status.scanned_stocks} of ${status.total_stocks} stocks`;
+
+                // Check if completed
+                if (status.status === 'completed' || status.status === 'failed' || status.status === 'cancelled') {
+                    clearInterval(progressInterval);
+                    progressInterval = null;
+
+                    if (status.status === 'completed') {
+                        showAlert('success', `Scan completed! Found ${status.matched_stocks} matches.`);
+                        progressBar.classList.remove('progress-bar-animated');
+                    } else if (status.status === 'failed') {
+                        showAlert('danger', 'Scan failed: ' + (status.error_message || 'Unknown error'));
+                    } else if (status.status === 'cancelled') {
+                        showAlert('warning', 'Scan cancelled');
+                    }
+
+                    resetScanButton();
+                    document.getElementById('cancelScanBtn').style.display = 'none';
+
+                    // Reload page after 2 seconds to show updated results
+                    setTimeout(() => location.reload(), 2000);
+                }
+            }
+        } catch (error) {
+            console.error('Error updating progress:', error);
+        }
+    }
+
+    // Cancel Scan
+    async function cancelScan() {
+        if (!currentTaskId) return;
+
+        if (confirm('Are you sure you want to cancel the scan?')) {
+            try {
+                const response = await fetch(`/scanner/scan/${currentTaskId}/cancel`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrfToken
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAlert('info', 'Scan cancelled');
+                    if (progressInterval) {
+                        clearInterval(progressInterval);
+                    }
+                    resetScanButton();
+                } else {
+                    showAlert('danger', data.error || 'Could not cancel scan');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showAlert('danger', 'An error occurred while cancelling the scan');
+            }
+        }
+    }
+
+    // Show Alert
+    function showAlert(type, message) {
+        const alertHTML = `
+            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+        document.getElementById('alertContainer').innerHTML = alertHTML;
+
+        // Auto-dismiss after 5 seconds
+        setTimeout(() => {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(alert => {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+    }
+
+    // Confirm Delete Profile
+    function confirmDelete(profileId, profileName) {
+        document.getElementById('deleteProfileName').textContent = profileName;
+        document.getElementById('deleteForm').action = `/scanner/profiles/${profileId}/delete`;
+
+        const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+        deleteModal.show();
+    }
+</script>
 {% endblock %}

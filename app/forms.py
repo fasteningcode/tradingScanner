@@ -1,7 +1,7 @@
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileRequired, FileAllowed
-from wtforms import StringField, PasswordField, BooleanField, SubmitField
-from wtforms.validators import DataRequired, Email, EqualTo, Length, ValidationError
+from wtforms import StringField, PasswordField, BooleanField, SubmitField, TextAreaField
+from wtforms.validators import DataRequired, Email, EqualTo, Length, ValidationError, Optional
 from app.models import User
 
 
@@ -113,3 +113,18 @@ class KiteCredentialsForm(FlaskForm):
     public_token = StringField('Public Token')
     refresh_token = StringField('Refresh Token')
     submit = SubmitField('Update Credentials')
+
+
+class ScannerProfileForm(FlaskForm):
+    """Form for creating/editing scanner profiles"""
+
+    name = StringField('Profile Name', validators=[
+        DataRequired(message='Profile name is required'),
+        Length(min=3, max=100, message='Name must be between 3 and 100 characters')
+    ])
+    description = TextAreaField('Description', validators=[
+        Optional(),
+        Length(max=500, message='Description cannot exceed 500 characters')
+    ])
+    is_default = BooleanField('Set as Default Profile')
+    submit = SubmitField('Save Profile')

@@ -1,0 +1,370 @@
+[
+  {
+    "symbol": "ANANDRATHI",
+    "institutional_score": 79,
+    "breakout_probability": "HIGH (70-80%)",
+    "recommendation": "BUY - Good accumulation pattern",
+    "expected_timeframe": "2-3 weeks (Building pressure)",
+    "stage": 2,
+    "current_price": 3128.1,
+    "volume_metrics": {
+      "current_volume": 116561,
+      "avg_20d": 561301,
+      "avg_50d": 301838,
+      "current_vs_20d_pct": 20.8,
+      "current_vs_50d_pct": 38.6,
+      "avg_5d_vs_50d_pct": 43.5,
+      "declining_days": 6,
+      "last_5_volumes": [
+        119388,
+        112898,
+        178488,
+        129581,
+        116561
+      ]
+    },
+    "price_metrics": {
+      "consolidation_5d_pct": 3.51,
+      "consolidation_10d_pct": 6.66,
+      "dist_from_52w_high_pct": 5.82,
+      "dist_from_52w_low_pct": 96.24,
+      "ma_50": 3001.24,
+      "ma_150": 2423.04,
+      "ma_200": 2280.72,
+      "52w_high": 3321.4,
+      "52w_low": 1594.0
+    },
+    "score_breakdown": {
+      "vol_vs_20d": "12/15 (Strong dry-up <30%)",
+      "sustained_dryup": "10/15 (Sustained 5d<50% of 50d)",
+      "vol_trend": "7/10 (5-6 declining days)",
+      "consolidation": "8/15 (Good <4%)",
+      "position": "7/10 (Close to 52w high <10%)",
+      "stage": "20/20 (Stage 2 - IDEAL for breakout)",
+      "ma_structure": "15/15 (MA alignment)"
+    },
+    "last_date": "2025-11-07"
+  },
+  {
+    "symbol": "NESTLEIND",
+    "institutional_score": 72,
+    "breakout_probability": "HIGH (70-80%)",
+    "recommendation": "BUY - Good accumulation pattern",
+    "expected_timeframe": "2-3 weeks (Building pressure)",
+    "stage": 2,
+    "current_price": 1262.8,
+    "volume_metrics": {
+      "current_volume": 594859,
+      "avg_20d": 1489638,
+      "avg_50d": 1402598,
+      "current_vs_20d_pct": 39.9,
+      "current_vs_50d_pct": 42.4,
+      "avg_5d_vs_50d_pct": 61.7,
+      "declining_days": 6,
+      "last_5_volumes": [
+        943037,
+        847050,
+        770668,
+        1171263,
+        594859
+      ]
+    },
+    "price_metrics": {
+      "consolidation_5d_pct": 2.66,
+      "consolidation_10d_pct": 3.32,
+      "dist_from_52w_high_pct": 3.72,
+      "dist_from_52w_low_pct": 19.7,
+      "ma_50": 1213.99,
+      "ma_150": 1191.15,
+      "ma_200": 1171.09,
+      "52w_high": 1311.6,
+      "52w_low": 1055.0
+    },
+    "score_breakdown": {
+      "vol_vs_20d": "8/15 (Good dry-up <40%)",
+      "sustained_dryup": "0/15 (No sustained dry-up)",
+      "vol_trend": "7/10 (5-6 declining days)",
+      "consolidation": "12/15 (Tight <3%)",
+      "position": "10/10 (Near 52w high <5%)",
+      "stage": "20/20 (Stage 2 - IDEAL for breakout)",
+      "ma_structure": "15/15 (MA alignment)"
+    },
+    "last_date": "2025-11-07"
+  },
+  {
+    "symbol": "RBLBANK",
+    "institutional_score": 67,
+    "breakout_probability": "MODERATE-HIGH (60-70%)",
+    "recommendation": "ACCUMULATE - Watch for confirmation",
+    "expected_timeframe": "3-4 weeks (Early accumulation)",
+    "stage": 2,
+    "current_price": 328.5,
+    "volume_metrics": {
+      "current_volume": 7933034,
+      "avg_20d": 18382460,
+      "avg_50d": 16268163,
+      "current_vs_20d_pct": 43.2,
+      "current_vs_50d_pct": 48.8,
+      "avg_5d_vs_50d_pct": 54.1,
+      "declining_days": 4,
+      "last_5_volumes": [
+        10422948,
+        5670523,
+        9204487,
+        10775022,
+        7933034
+      ]
+    },
+    "price_metrics": {
+      "consolidation_5d_pct": 3.8,
+      "consolidation_10d_pct": 5.6,
+      "dist_from_52w_high_pct": 1.05,
+      "dist_from_52w_low_pct": 124.85,
+      "ma_50": 287.96,
+      "ma_150": 247.0,
+      "ma_200": 225.75,
+      "52w_high": 332.0,
+      "52w_low": 146.1
+    },
+    "score_breakdown": {
+      "vol_vs_20d": "5/15 (Moderate dry-up <50%)",
+      "sustained_dryup": "5/15 (Moderate sustained dry-up)",
+      "vol_trend": "4/10 (3-4 declining days)",
+      "consolidation": "8/15 (Good <4%)",
+      "position": "10/10 (Near 52w high <5%)",
+      "stage": "20/20 (Stage 2 - IDEAL for breakout)",
+      "ma_structure": "15/15 (MA alignment)"
+    },
+    "last_date": "2025-11-07"
+  },
+  {
+    "symbol": "HINDZINC",
+    "institutional_score": 62,
+    "breakout_probability": "MODERATE-HIGH (60-70%)",
+    "recommendation": "ACCUMULATE - Watch for confirmation",
+    "expected_timeframe": "3-4 weeks (Early accumulation)",
+    "stage": 2,
+    "current_price": 474.5,
+    "volume_metrics": {
+      "current_volume": 3000939,
+      "avg_20d": 6106690,
+      "avg_50d": 5371383,
+      "current_vs_20d_pct": 49.1,
+      "current_vs_50d_pct": 55.9,
+      "avg_5d_vs_50d_pct": 40.6,
+      "declining_days": 5,
+      "last_5_volumes": [
+        1821466,
+        1981640,
+        2221861,
+        1874384,
+        3000939
+      ]
+    },
+    "price_metrics": {
+      "consolidation_5d_pct": 4.63,
+      "consolidation_10d_pct": 7.9,
+      "dist_from_52w_high_pct": 16.02,
+      "dist_from_52w_low_pct": 25.48,
+      "ma_50": 468.44,
+      "ma_150": 452.01,
+      "ma_200": 447.64,
+      "52w_high": 565.0,
+      "52w_low": 378.15
+    },
+    "score_breakdown": {
+      "vol_vs_20d": "5/15 (Moderate dry-up <50%)",
+      "sustained_dryup": "10/15 (Sustained 5d<50% of 50d)",
+      "vol_trend": "7/10 (5-6 declining days)",
+      "consolidation": "5/15 (Moderate <5%)",
+      "position": "0/10 (Too far from 52w high)",
+      "stage": "20/20 (Stage 2 - IDEAL for breakout)",
+      "ma_structure": "15/15 (MA alignment)"
+    },
+    "last_date": "2025-11-07"
+  },
+  {
+    "symbol": "STARHEALTH",
+    "institutional_score": 59,
+    "breakout_probability": "MODERATE (50-60%)",
+    "recommendation": "WATCH - Early stage pattern",
+    "expected_timeframe": "3-4 weeks (Early accumulation)",
+    "stage": 2,
+    "current_price": 490.35,
+    "volume_metrics": {
+      "current_volume": 249530,
+      "avg_20d": 701074,
+      "avg_50d": 981064,
+      "current_vs_20d_pct": 35.6,
+      "current_vs_50d_pct": 25.4,
+      "avg_5d_vs_50d_pct": 55.2,
+      "declining_days": 4,
+      "last_5_volumes": [
+        1544477,
+        335890,
+        386183,
+        189589,
+        249530
+      ]
+    },
+    "price_metrics": {
+      "consolidation_5d_pct": 5.27,
+      "consolidation_10d_pct": 8.24,
+      "dist_from_52w_high_pct": 5.51,
+      "dist_from_52w_low_pct": 49.82,
+      "ma_50": 464.63,
+      "ma_150": 436.58,
+      "ma_200": 426.67,
+      "52w_high": 518.95,
+      "52w_low": 327.3
+    },
+    "score_breakdown": {
+      "vol_vs_20d": "8/15 (Good dry-up <40%)",
+      "sustained_dryup": "5/15 (Moderate sustained dry-up)",
+      "vol_trend": "4/10 (3-4 declining days)",
+      "consolidation": "0/15 (Too wide for dry-up pattern)",
+      "position": "7/10 (Close to 52w high <10%)",
+      "stage": "20/20 (Stage 2 - IDEAL for breakout)",
+      "ma_structure": "15/15 (MA alignment)"
+    },
+    "last_date": "2025-11-07"
+  },
+  {
+    "symbol": "CESC",
+    "institutional_score": 57,
+    "breakout_probability": "MODERATE (50-60%)",
+    "recommendation": "WATCH - Early stage pattern",
+    "expected_timeframe": "3-4 weeks (Early accumulation)",
+    "stage": 2,
+    "current_price": 174.52,
+    "volume_metrics": {
+      "current_volume": 1432948,
+      "avg_20d": 3618246,
+      "avg_50d": 3057830,
+      "current_vs_20d_pct": 39.6,
+      "current_vs_50d_pct": 46.9,
+      "avg_5d_vs_50d_pct": 62.9,
+      "declining_days": 6,
+      "last_5_volumes": [
+        1367003,
+        1762258,
+        3259381,
+        1794516,
+        1432948
+      ]
+    },
+    "price_metrics": {
+      "consolidation_5d_pct": 5.03,
+      "consolidation_10d_pct": 6.44,
+      "dist_from_52w_high_pct": 8.83,
+      "dist_from_52w_low_pct": 51.59,
+      "ma_50": 163.48,
+      "ma_150": 162.06,
+      "ma_200": 155.25,
+      "52w_high": 191.42,
+      "52w_low": 115.13
+    },
+    "score_breakdown": {
+      "vol_vs_20d": "8/15 (Good dry-up <40%)",
+      "sustained_dryup": "0/15 (No sustained dry-up)",
+      "vol_trend": "7/10 (5-6 declining days)",
+      "consolidation": "0/15 (Too wide for dry-up pattern)",
+      "position": "7/10 (Close to 52w high <10%)",
+      "stage": "20/20 (Stage 2 - IDEAL for breakout)",
+      "ma_structure": "15/15 (MA alignment)"
+    },
+    "last_date": "2025-11-07"
+  },
+  {
+    "symbol": "GRANULES",
+    "institutional_score": 51,
+    "breakout_probability": "MODERATE (50-60%)",
+    "recommendation": "WATCH - Early stage pattern",
+    "expected_timeframe": "3-4 weeks (Early accumulation)",
+    "stage": 1,
+    "current_price": 553.25,
+    "volume_metrics": {
+      "current_volume": 307113,
+      "avg_20d": 920116,
+      "avg_50d": 1654584,
+      "current_vs_20d_pct": 33.4,
+      "current_vs_50d_pct": 18.6,
+      "avg_5d_vs_50d_pct": 27.1,
+      "declining_days": 4,
+      "last_5_volumes": [
+        384397,
+        461593,
+        388985,
+        696917,
+        307113
+      ]
+    },
+    "price_metrics": {
+      "consolidation_5d_pct": 5.08,
+      "consolidation_10d_pct": 5.78,
+      "dist_from_52w_high_pct": 11.9,
+      "dist_from_52w_low_pct": 31.1,
+      "ma_50": 541.49,
+      "ma_150": 502.61,
+      "ma_200": 508.49,
+      "52w_high": 628.0,
+      "52w_low": 422.0
+    },
+    "score_breakdown": {
+      "vol_vs_20d": "8/15 (Good dry-up <40%)",
+      "sustained_dryup": "15/15 (Sustained 5d<40% of 50d)",
+      "vol_trend": "4/10 (3-4 declining days)",
+      "consolidation": "0/15 (Too wide for dry-up pattern)",
+      "position": "4/10 (Moderate distance <15%)",
+      "stage": "10/20 (Stage 1 - Emerging from base)",
+      "ma_structure": "10/15 (MA alignment)"
+    },
+    "last_date": "2025-11-07"
+  },
+  {
+    "symbol": "MAPMYINDIA",
+    "institutional_score": 49,
+    "breakout_probability": "LOW (<50%)",
+    "recommendation": "MONITOR - Weak pattern",
+    "expected_timeframe": "3-4 weeks (Early accumulation)",
+    "stage": 3,
+    "current_price": 1809.8,
+    "volume_metrics": {
+      "current_volume": 66743,
+      "avg_20d": 431185,
+      "avg_50d": 199199,
+      "current_vs_20d_pct": 15.5,
+      "current_vs_50d_pct": 33.5,
+      "avg_5d_vs_50d_pct": 32.6,
+      "declining_days": 4,
+      "last_5_volumes": [
+        125835,
+        56384,
+        37597,
+        38619,
+        66743
+      ]
+    },
+    "price_metrics": {
+      "consolidation_5d_pct": 5.28,
+      "consolidation_10d_pct": 5.97,
+      "dist_from_52w_high_pct": 16.47,
+      "dist_from_52w_low_pct": 19.62,
+      "ma_50": 1714.55,
+      "ma_150": 1788.09,
+      "ma_200": 1755.77,
+      "52w_high": 2166.7,
+      "52w_low": 1513.0
+    },
+    "score_breakdown": {
+      "vol_vs_20d": "15/15 (Extreme dry-up <20%)",
+      "sustained_dryup": "15/15 (Sustained 5d<40% of 50d)",
+      "vol_trend": "4/10 (3-4 declining days)",
+      "consolidation": "0/15 (Too wide for dry-up pattern)",
+      "position": "0/10 (Too far from 52w high)",
+      "stage": "5/20 (Stage 3 - Topping risk)",
+      "ma_structure": "10/15 (MA alignment)"
+    },
+    "last_date": "2025-11-07"
+  }
+]

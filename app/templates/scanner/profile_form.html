@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('scanner.index') }}">Scanner</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('scanner.index', tab='profiles') }}">Profiles</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ 'Edit' if action == 'edit' else 'Create' }} Profile</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-{{ 'pencil' if action == 'edit' else 'plus-circle' }} me-2"></i>
+                    {{ 'Edit' if action == 'edit' else 'Create' }} Scanner Profile
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="post" novalidate>
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        {{ form.name.label(class="form-label") }}
+                        {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
+                        {% if form.name.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.name.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">
+                            Give your scanner profile a unique name
+                        </small>
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.description.label(class="form-label") }}
+                        {{ form.description(class="form-control" + (" is-invalid" if form.description.errors else ""), rows=3) }}
+                        {% if form.description.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.description.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">
+                            Optional: Describe what this profile scans for
+                        </small>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            {{ form.is_default(class="form-check-input") }}
+                            {{ form.is_default.label(class="form-check-label") }}
+                        </div>
+                        <small class="form-text text-muted">
+                            The default profile will be automatically selected when you open the scanner
+                        </small>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Note:</strong> Scanning criteria (price range, volume, RS, stage, etc.) will be configured in upcoming updates. For now, you can create profile placeholders.
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('scanner.index', tab='profiles') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle me-2"></i>Cancel
+                        </a>
+                        {{ form.submit(class="btn btn-primary") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
