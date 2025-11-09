@@ -19,6 +19,135 @@ import json
 scanner_bp = Blueprint('scanner', __name__, url_prefix='/scanner')
 
 
+# ========================================
+# Moving Average Calculation Helpers
+# ========================================
+
+def calculate_sma(candles, period):
+    """
+    Calculate Simple Moving Average (SMA) for given period
+
+    Args:
+        candles: List of candle dicts with 'close' prices (sorted oldest to newest)
+        period: Number of periods (e.g., 9, 20, 50)
+
+    Returns:
+        float: SMA value or None if insufficient data
+    """
+    if not candles or len(candles) < period:
+        return None
+
+    # Take the last 'period' candles and calculate average of close prices
+    recent_candles = candles[-period:]
+    close_prices = [c.get('close') for c in recent_candles if c.get('close') is not None]
+
+    if len(close_prices) < period:
+        return None
+
+    return sum(close_prices) / period
+
+
+def calculate_ema(candles, period):
+    """
+    Calculate Exponential Moving Average (EMA) for given period
+
+    Args:
+        candles: List of candle dicts with 'close' prices (sorted oldest to newest)
+        period: Number of periods (e.g., 9, 20, 50)
+
+    Returns:
+        float: EMA value or None if insufficient data
+    """
+    if not candles or len(candles) < period:
+        return None
+
+    close_prices = [c.get('close') for c in candles if c.get('close') is not None]
+
+    if len(close_prices) < period:
+        return None
+
+    # Calculate multiplier: 2 / (period + 1)
+    multiplier = 2 / (period + 1)
+
+    # Start with SMA as the first EMA value
+    ema = sum(close_prices[:period]) / period
+
+    # Calculate EMA for remaining values
+    for price in close_prices[period:]:
+        ema = (price - ema) * multiplier + ema
+
+    return ema
+
+
+def get_stock_ma_values(stock, selected_sma, selected_ema, interval='day'):
+    """
+    Get MA values for a stock from its candlestick data
+
+    Args:
+        stock: Instrument object
+        selected_sma: List of SMA periods (e.g., [9, 20, 50])
+        selected_ema: List of EMA periods (e.g., [9, 20, 50])
+        interval: Candlestick interval (default: 'day')
+
+    Returns:
+        dict: {
+            'current_price': float,
+            'sma': {9: value, 20: value, ...},
+            'ema': {9: value, 20: value, ...},
+            'has_data': bool,
+            'error': str or None
+        }
+    """
+    from app.models import HistoricalData
+
+    result = {
+        'current_price': None,
+        'sma': {},
+        'ema': {},
+        'has_data': False,
+        'error': None
+    }
+
+    # Get historical data for this stock
+    hist_data = HistoricalData.query.filter_by(
+        tradingsymbol=stock.tradingsymbol,
+        interval=interval
+    ).first()
+
+    if not hist_data:
+        result['error'] = 'No historical data'
+        return result
+
+    # Parse candlestick data
+    candles = hist_data.get_candles()
+
+    if not candles or len(candles) < 2:
+        result['error'] = 'Insufficient candles'
+        return result
+
+    # Get current price (last close)
+    result['current_price'] = candles[-1].get('close')
+
+    if result['current_price'] is None:
+        result['error'] = 'No current price'
+        return result
+
+    # Calculate SMAs
+    for period in selected_sma:
+        sma_value = calculate_sma(candles, period)
+        if sma_value is not None:
+            result['sma'][period] = sma_value
+
+    # Calculate EMAs
+    for period in selected_ema:
+        ema_value = calculate_ema(candles, period)
+        if ema_value is not None:
+            result['ema'][period] = ema_value
+
+    result['has_data'] = True
+    return result
+
+
 @scanner_bp.route('/')
 @scanner_bp.route('/<tab>')
 @login_required
@@ -986,7 +1115,7 @@ def _apply_rs_filter_debug(query, criteria):
 
 
 def _apply_ma_filter_debug(query, criteria):
-    """Apply MA filter with detailed debugging"""
+    """Apply MA filter with detailed debugging - Price must be ABOVE all selected MAs"""
     debug = {'steps': [], 'logs': []}
 
     selected_sma = criteria.get('selected_sma', [])
@@ -1004,18 +1133,92 @@ def _apply_ma_filter_debug(query, criteria):
             'count': count,
             'passed': True
         })
+        return query, debug
+
+    # MA filtering - check each stock individually
+    initial_count = query.count()
+    all_stocks = query.all()
+
+    debug['logs'].append(f'[MA_FILTER] Analyzing {initial_count} stocks for MA criteria')
+    debug['logs'].append(f'[MA_FILTER] Criteria: Price must be ABOVE all selected MAs')
+    debug['logs'].append('')
+
+    passed_stocks = []
+    rejected_stocks = []
+
+    for stock in all_stocks:
+        # Get MA values for this stock
+        ma_data = get_stock_ma_values(stock, selected_sma, selected_ema, interval='day')
+
+        # Check if we have data
+        if not ma_data['has_data'] or ma_data['error']:
+            rejected_stocks.append(stock.id)
+            debug['logs'].append(f'✗ {stock.tradingsymbol}: {ma_data["error"]}')
+            continue
+
+        current_price = ma_data['current_price']
+
+        # Check if price is above ALL selected MAs
+        price_above_all = True
+        ma_details = []
+
+        # Check SMAs
+        for period in selected_sma:
+            if period in ma_data['sma']:
+                sma_val = ma_data['sma'][period]
+                is_above = current_price > sma_val
+                symbol = '✓' if is_above else '✗'
+                ma_details.append(f'SMA{period}={sma_val:.2f} {symbol}')
+                if not is_above:
+                    price_above_all = False
+            else:
+                ma_details.append(f'SMA{period}=N/A ✗')
+                price_above_all = False
+
+        # Check EMAs
+        for period in selected_ema:
+            if period in ma_data['ema']:
+                ema_val = ma_data['ema'][period]
+                is_above = current_price > ema_val
+                symbol = '✓' if is_above else '✗'
+                ma_details.append(f'EMA{period}={ema_val:.2f} {symbol}')
+                if not is_above:
+                    price_above_all = False
+            else:
+                ma_details.append(f'EMA{period}=N/A ✗')
+                price_above_all = False
+
+        # Create log entry
+        ma_str = ', '.join(ma_details)
+        if price_above_all:
+            passed_stocks.append(stock.id)
+            debug['logs'].append(f'✓ {stock.tradingsymbol}: Price={current_price:.2f} | {ma_str} | PASSED')
+        else:
+            rejected_stocks.append(stock.id)
+            debug['logs'].append(f'✗ {stock.tradingsymbol}: Price={current_price:.2f} | {ma_str} | REJECTED')
+
+    # Filter query to only include passed stocks
+    if passed_stocks:
+        query = query.filter(Instrument.id.in_(passed_stocks))
     else:
-        # NOTE: MA filtering logic not yet implemented in backend
-        # This is a placeholder for when MA data becomes available
-        count = query.count()
-        debug['logs'].append(f'[MA_FILTER] MA filtering not yet implemented - returning all stocks')
-        debug['steps'].append({
-            'description': 'Moving Average Filter (Not Implemented)',
-            'details': f'Selected: SMA {selected_sma}, EMA {selected_ema}',
-            'criteria': 'Price above selected MAs (feature pending)',
-            'count': count,
-            'passed': False
-        })
+        # No stocks passed - return empty query
+        query = query.filter(Instrument.id == -1)  # Impossible condition to return empty set
+
+    final_count = len(passed_stocks)
+
+    debug['logs'].append('')
+    debug['logs'].append(f'[MA_FILTER] ====== SUMMARY ======')
+    debug['logs'].append(f'[MA_FILTER] Total stocks analyzed: {initial_count}')
+    debug['logs'].append(f'[MA_FILTER] Stocks PASSED (price above all MAs): {final_count}')
+    debug['logs'].append(f'[MA_FILTER] Stocks REJECTED: {len(rejected_stocks)}')
+
+    debug['steps'].append({
+        'description': 'Moving Average Filter',
+        'details': f'Price must be above all selected MAs',
+        'criteria': f'SMA: {selected_sma}, EMA: {selected_ema}',
+        'count': final_count,
+        'passed': final_count > 0
+    })
 
     return query, debug
 

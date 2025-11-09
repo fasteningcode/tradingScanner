@@ -11,10 +11,70 @@ from typing import Optional, Dict, List
 from datetime import datetime
 from flask import current_app
 from app import db
-from app.models import ScannerProfile, ScannerTask, Instrument, SubSector
+from app.models import ScannerProfile, ScannerTask, Instrument, SubSector, HistoricalData
 
 # Dictionary to track running scanner tasks
 _running_tasks = {}
+
+
+# ========================================
+# Moving Average Calculation Helpers
+# ========================================
+
+def calculate_sma(candles, period):
+    """
+    Calculate Simple Moving Average (SMA) for given period
+
+    Args:
+        candles: List of candle dicts with 'close' prices (sorted oldest to newest)
+        period: Number of periods (e.g., 9, 20, 50)
+
+    Returns:
+        float: SMA value or None if insufficient data
+    """
+    if not candles or len(candles) < period:
+        return None
+
+    # Take the last 'period' candles and calculate average of close prices
+    recent_candles = candles[-period:]
+    close_prices = [c.get('close') for c in recent_candles if c.get('close') is not None]
+
+    if len(close_prices) < period:
+        return None
+
+    return sum(close_prices) / period
+
+
+def calculate_ema(candles, period):
+    """
+    Calculate Exponential Moving Average (EMA) for given period
+
+    Args:
+        candles: List of candle dicts with 'close' prices (sorted oldest to newest)
+        period: Number of periods (e.g., 9, 20, 50)
+
+    Returns:
+        float: EMA value or None if insufficient data
+    """
+    if not candles or len(candles) < period:
+        return None
+
+    close_prices = [c.get('close') for c in candles if c.get('close') is not None]
+
+    if len(close_prices) < period:
+        return None
+
+    # Calculate multiplier: 2 / (period + 1)
+    multiplier = 2 / (period + 1)
+
+    # Start with SMA as the first EMA value
+    ema = sum(close_prices[:period]) / period
+
+    # Calculate EMA for remaining values
+    for price in close_prices[period:]:
+        ema = (price - ema) * multiplier + ema
+
+    return ema
 
 
 def start_scan(user_id: int, profile_id: int, app=None) -> Optional[int]:
@@ -283,6 +343,7 @@ class Scanner:
         enable_scan_level_filter = criteria.get('enable_scan_level_filter', True)
         enable_rs_filter = criteria.get('enable_rs_filter', False)
         enable_volume_contraction_filter = criteria.get('enable_volume_contraction_filter', False)
+        enable_ma_filter = criteria.get('enable_ma_filter', False)
 
         # Get RS filter values
         rs_sub_min = criteria.get('rs_sub_min')
@@ -293,6 +354,10 @@ class Scanner:
         # Get Volume Contraction filter values
         selected_volume_status = criteria.get('selected_volume_status', [])
         selected_volume_classification = criteria.get('selected_volume_classification', [])
+
+        # Get MA filter values
+        selected_sma = criteria.get('selected_sma', [])
+        selected_ema = criteria.get('selected_ema', [])
 
         current_app.logger.info(
             f'Scanner task {self.task_id}: Criteria - Level: {scan_level}, '
@@ -394,6 +459,72 @@ class Scanner:
                 query = query.filter(Instrument.volume_dryup_status.isnot(None))
             if selected_volume_classification:
                 query = query.filter(Instrument.volume_dryup_classification.isnot(None))
+
+        # Apply MA filter (only if MA filter is enabled)
+        if enable_ma_filter and (selected_sma or selected_ema):
+            current_app.logger.info(
+                f'Scanner task {self.task_id}: Applying MA filter - SMA: {selected_sma}, EMA: {selected_ema}'
+            )
+
+            # Get all stocks from current query
+            all_stocks = query.all()
+            passed_stock_ids = []
+
+            for stock in all_stocks:
+                # Get historical data for this stock
+                hist_data = HistoricalData.query.filter_by(
+                    tradingsymbol=stock.tradingsymbol,
+                    interval='day'
+                ).first()
+
+                if not hist_data:
+                    continue
+
+                # Parse candlestick data
+                candles = hist_data.get_candles()
+
+                if not candles or len(candles) < 2:
+                    continue
+
+                # Get current price (last close)
+                current_price = candles[-1].get('close')
+
+                if current_price is None:
+                    continue
+
+                # Check if price is above ALL selected MAs
+                price_above_all = True
+
+                # Check SMAs
+                for period in selected_sma:
+                    sma_value = calculate_sma(candles, period)
+                    if sma_value is None or current_price <= sma_value:
+                        price_above_all = False
+                        break
+
+                # Check EMAs (only if still passing)
+                if price_above_all:
+                    for period in selected_ema:
+                        ema_value = calculate_ema(candles, period)
+                        if ema_value is None or current_price <= ema_value:
+                            price_above_all = False
+                            break
+
+                if price_above_all:
+                    passed_stock_ids.append(stock.id)
+
+            # Filter query to only include passed stocks
+            if passed_stock_ids:
+                query = query.filter(Instrument.id.in_(passed_stock_ids))
+                current_app.logger.info(
+                    f'Scanner task {self.task_id}: MA filter passed {len(passed_stock_ids)} stocks'
+                )
+            else:
+                # No stocks passed - return empty query
+                query = query.filter(Instrument.id == -1)
+                current_app.logger.info(
+                    f'Scanner task {self.task_id}: MA filter passed 0 stocks'
+                )
 
         stocks = query.all()
         current_app.logger.info(f'Scanner task {self.task_id}: Filtered to {len(stocks)} stocks')
