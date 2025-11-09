@@ -1305,11 +1305,15 @@
             </div>
         `;
 
+        // Get CSRF token
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+
         // Make AJAX request to debug endpoint
         fetch('/scanner/debug-filter', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
             },
             body: JSON.stringify({
                 filter_type: filterType,
