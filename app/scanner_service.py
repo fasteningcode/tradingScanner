@@ -313,12 +313,13 @@ class Scanner:
         if enable_scan_level_filter:
             if scan_level == 'stage' and selected_stages:
                 # Filter by selected stages
-                # Important: Both sector AND subsector stages must match selected stages
-                # Join with SubSector and Sector to check both stages
+                # Important: Stock, subsector, AND sector stages must ALL match selected stages
+                # Join with SubSector and Sector to check all three stages
                 from app.models import Sector
                 query = query.join(SubSector, Instrument.sub_sector_id == SubSector.id).join(
                     Sector, SubSector.sector_id == Sector.id
                 ).filter(
+                    Instrument.current_stage.in_(selected_stages),
                     SubSector.current_stage.in_(selected_stages),
                     Sector.current_stage.in_(selected_stages)
                 )
@@ -327,11 +328,25 @@ class Scanner:
                 query = query.join(SubSector, Instrument.sub_sector_id == SubSector.id).filter(
                     SubSector.sector_id.in_(selected_sectors)
                 )
+                # For sector-level scan, ALWAYS filter by stock stages
+                # If no stages selected, default to stages 1 and 2 (Accumulation and Markup)
+                if not selected_stages:
+                    selected_stages = [1, 2]
+                    current_app.logger.info(f'Scanner task {self.task_id}: No stages selected for sector-level scan, defaulting to stages {selected_stages}')
+                query = query.filter(Instrument.current_stage.in_(selected_stages))
+                current_app.logger.info(f'Scanner task {self.task_id}: Applied stock stage filter {selected_stages} to sector-level scan')
             elif scan_level == 'subsector' and selected_subsectors:
                 # Filter by selected subsectors
                 query = query.filter(
                     Instrument.sub_sector_id.in_(selected_subsectors)
                 )
+                # For subsector-level scan, ALWAYS filter by stock stages
+                # If no stages selected, default to stages 1 and 2 (Accumulation and Markup)
+                if not selected_stages:
+                    selected_stages = [1, 2]
+                    current_app.logger.info(f'Scanner task {self.task_id}: No stages selected for subsector-level scan, defaulting to stages {selected_stages}')
+                query = query.filter(Instrument.current_stage.in_(selected_stages))
+                current_app.logger.info(f'Scanner task {self.task_id}: Applied stock stage filter {selected_stages} to subsector-level scan')
             else:
                 # No valid selections, log warning but continue
                 current_app.logger.warning(f'Scanner task {self.task_id}: No valid selections in scan level criteria')
@@ -340,25 +355,23 @@ class Scanner:
         if enable_rs_filter:
             # Filter by RS vs Subsector
             if rs_sub_min is not None:
-                query = query.filter(Instrument.rs_subsector >= rs_sub_min)
+                query = query.filter(Instrument.rs_vs_subsector.isnot(None))
+                query = query.filter(Instrument.rs_vs_subsector >= rs_sub_min)
                 current_app.logger.info(f'Scanner task {self.task_id}: Applying RS Sub Min filter: >= {rs_sub_min}')
             if rs_sub_max is not None:
-                query = query.filter(Instrument.rs_subsector <= rs_sub_max)
+                query = query.filter(Instrument.rs_vs_subsector.isnot(None))
+                query = query.filter(Instrument.rs_vs_subsector <= rs_sub_max)
                 current_app.logger.info(f'Scanner task {self.task_id}: Applying RS Sub Max filter: <= {rs_sub_max}')
 
             # Filter by RS vs Sector
             if rs_sec_min is not None:
-                query = query.filter(Instrument.rs_sector >= rs_sec_min)
+                query = query.filter(Instrument.rs_vs_sector.isnot(None))
+                query = query.filter(Instrument.rs_vs_sector >= rs_sec_min)
                 current_app.logger.info(f'Scanner task {self.task_id}: Applying RS Sec Min filter: >= {rs_sec_min}')
             if rs_sec_max is not None:
-                query = query.filter(Instrument.rs_sector <= rs_sec_max)
+                query = query.filter(Instrument.rs_vs_sector.isnot(None))
+                query = query.filter(Instrument.rs_vs_sector <= rs_sec_max)
                 current_app.logger.info(f'Scanner task {self.task_id}: Applying RS Sec Max filter: <= {rs_sec_max}')
-
-            # Exclude stocks with NULL RS values when RS filter is enabled
-            if rs_sub_min is not None or rs_sub_max is not None:
-                query = query.filter(Instrument.rs_subsector.isnot(None))
-            if rs_sec_min is not None or rs_sec_max is not None:
-                query = query.filter(Instrument.rs_sector.isnot(None))
 
         # Apply Volume Contraction filters (only if volume contraction filter is enabled)
         if enable_volume_contraction_filter:

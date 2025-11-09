@@ -490,13 +490,19 @@ def debug_filter():
         debug_info['eliminated_stocks'] = initial_count - len(matched_stocks)
         debug_info['logs'].append(f'[RESULT] Matched: {len(matched_stocks)}, Eliminated: {debug_info["eliminated_stocks"]}')
 
-        # Get sample stocks (first 10)
-        for stock in matched_stocks[:10]:
+        # Get all matched stocks (full list for frontend pagination)
+        for stock in matched_stocks:
             debug_info['sample_stocks'].append({
                 'tradingsymbol': stock.tradingsymbol,
                 'name': stock.name,
-                'sector': stock.subsector.sector.name if stock.subsector and stock.subsector.sector else '',
-                'subsector': stock.subsector.name if stock.subsector else ''
+                'sector': stock.sub_sector_obj.sector.name if stock.sub_sector_obj and stock.sub_sector_obj.sector else '',
+                'subsector': stock.sub_sector_obj.name if stock.sub_sector_obj else '',
+                'current_stage': stock.current_stage,
+                'rs_vs_subsector': round(stock.rs_vs_subsector, 2) if stock.rs_vs_subsector else None,
+                'rs_vs_sector': round(stock.rs_vs_sector, 2) if stock.rs_vs_sector else None,
+                'volume_dryup_status': stock.volume_dryup_status,
+                'volume_dryup_classification': stock.volume_dryup_classification,
+                'volume_ratio_pct': round(stock.volume_ratio_pct, 2) if stock.volume_ratio_pct else None
             })
 
         return jsonify({
@@ -603,55 +609,281 @@ def _apply_stage_level_filter_debug(query, criteria):
 
     if scan_level == 'stage' and selected_stages:
         debug['logs'].append(f'[STAGE_LEVEL] Filtering by stages: {selected_stages}')
+        debug['logs'].append(f'[STAGE_LEVEL] Criteria: Stock stage, Subsector stage, AND Sector stage must ALL be in {selected_stages}')
 
         from app.models import Sector
+
+        # Get all stocks before filtering to show detailed rejection reasons
+        all_stocks_query = query.join(SubSector, Instrument.sub_sector_id == SubSector.id).join(
+            Sector, SubSector.sector_id == Sector.id
+        )
+        all_stocks = all_stocks_query.all()
+
+        debug['logs'].append(f'[STAGE_LEVEL] Analyzing {len(all_stocks)} stocks...')
+        debug['logs'].append('')
+
+        # Track statistics
+        accepted_count = 0
+        rejected_stock_stage = 0
+        rejected_subsector_stage = 0
+        rejected_sector_stage = 0
+        rejected_multiple = 0
+
+        # Analyze each stock
+        for stock in all_stocks:
+            stock_stage = stock.current_stage
+            subsector_stage = stock.sub_sector_obj.current_stage if stock.sub_sector_obj else None
+            sector_stage = stock.sub_sector_obj.sector.current_stage if stock.sub_sector_obj and stock.sub_sector_obj.sector else None
+
+            stock_match = stock_stage in selected_stages
+            subsector_match = subsector_stage in selected_stages
+            sector_match = sector_stage in selected_stages
+
+            if stock_match and subsector_match and sector_match:
+                # ACCEPTED
+                accepted_count += 1
+                debug['logs'].append(
+                    f'✓ ACCEPTED: {stock.tradingsymbol} | '
+                    f'Stock Stage={stock_stage}, '
+                    f'Subsector Stage={subsector_stage} ({stock.sub_sector_obj.name if stock.sub_sector_obj else "N/A"}), '
+                    f'Sector Stage={sector_stage} ({stock.sub_sector_obj.sector.name if stock.sub_sector_obj and stock.sub_sector_obj.sector else "N/A"})'
+                )
+            else:
+                # REJECTED - determine why
+                rejection_reasons = []
+                failures = 0
+
+                if not stock_match:
+                    rejection_reasons.append(f'Stock stage {stock_stage} not in {selected_stages}')
+                    rejected_stock_stage += 1
+                    failures += 1
+
+                if not subsector_match:
+                    rejection_reasons.append(f'Subsector stage {subsector_stage} not in {selected_stages}')
+                    rejected_subsector_stage += 1
+                    failures += 1
+
+                if not sector_match:
+                    rejection_reasons.append(f'Sector stage {sector_stage} not in {selected_stages}')
+                    rejected_sector_stage += 1
+                    failures += 1
+
+                if failures > 1:
+                    rejected_multiple += 1
+
+                debug['logs'].append(
+                    f'✗ REJECTED: {stock.tradingsymbol} | '
+                    f'Stock Stage={stock_stage}, '
+                    f'Subsector Stage={subsector_stage} ({stock.sub_sector_obj.name if stock.sub_sector_obj else "N/A"}), '
+                    f'Sector Stage={sector_stage} ({stock.sub_sector_obj.sector.name if stock.sub_sector_obj and stock.sub_sector_obj.sector else "N/A"}) | '
+                    f'Reason: {"; ".join(rejection_reasons)}'
+                )
+
+        debug['logs'].append('')
+        debug['logs'].append(f'[STAGE_LEVEL] === FILTERING SUMMARY ===')
+        debug['logs'].append(f'[STAGE_LEVEL] Total stocks analyzed: {len(all_stocks)}')
+        debug['logs'].append(f'[STAGE_LEVEL] Accepted: {accepted_count}')
+        debug['logs'].append(f'[STAGE_LEVEL] Rejected: {len(all_stocks) - accepted_count}')
+        debug['logs'].append(f'[STAGE_LEVEL] Rejection breakdown:')
+        debug['logs'].append(f'[STAGE_LEVEL]   - Stock stage mismatch: {rejected_stock_stage}')
+        debug['logs'].append(f'[STAGE_LEVEL]   - Subsector stage mismatch: {rejected_subsector_stage}')
+        debug['logs'].append(f'[STAGE_LEVEL]   - Sector stage mismatch: {rejected_sector_stage}')
+        debug['logs'].append(f'[STAGE_LEVEL]   - Multiple mismatches: {rejected_multiple}')
+
+        # Apply the actual filter to the query
         query = query.join(SubSector, Instrument.sub_sector_id == SubSector.id).join(
             Sector, SubSector.sector_id == Sector.id
         ).filter(
+            Instrument.current_stage.in_(selected_stages),
             SubSector.current_stage.in_(selected_stages),
             Sector.current_stage.in_(selected_stages)
         )
 
         count = query.count()
-        debug['logs'].append(f'[STAGE_LEVEL] After stage filter: {count} stocks')
         debug['steps'].append({
             'description': 'Filter by Weinstein Stages',
-            'details': f'Stocks in stages {selected_stages} (both sector and subsector must match)',
+            'details': f'Stocks in stages {selected_stages} (stock, subsector, AND sector must ALL match)',
             'criteria': f'Stages: {", ".join(map(str, selected_stages))}',
             'count': count,
             'passed': count > 0
         })
 
     elif scan_level == 'sector' and selected_sectors:
-        debug['logs'].append(f'[STAGE_LEVEL] Filtering by sectors: {selected_sectors}')
+        from app.models import Sector
 
-        query = query.join(SubSector, Instrument.sub_sector_id == SubSector.id).filter(
+        # Get sector names for logging
+        sectors = Sector.query.filter(Sector.id.in_(selected_sectors)).all()
+        sector_names = [s.name for s in sectors]
+
+        debug['logs'].append(f'[SECTOR_LEVEL] Filtering by sectors: {sector_names}')
+        debug['logs'].append(f'[SECTOR_LEVEL] Sector IDs: {selected_sectors}')
+
+        # First, get all stocks from selected sectors
+        all_stocks_query = query.join(SubSector, Instrument.sub_sector_id == SubSector.id).filter(
             SubSector.sector_id.in_(selected_sectors)
         )
+        all_stocks = all_stocks_query.all()
 
-        count = query.count()
-        debug['logs'].append(f'[STAGE_LEVEL] After sector filter: {count} stocks')
+        debug['logs'].append(f'[SECTOR_LEVEL] Found {len(all_stocks)} stocks in selected sectors')
+        debug['logs'].append('')
+
+        # For sector-level scan, ALWAYS filter by stages
+        # If no stages selected, default to stages 1 and 2 (Accumulation and Markup)
+        selected_stages = criteria.get('selected_stages', [])
+        if not selected_stages:
+            selected_stages = [1, 2]  # Default to Accumulation and Markup stages
+            debug['logs'].append(f'[SECTOR_LEVEL] No stages selected - defaulting to stages {selected_stages} (Accumulation and Markup)')
+
+        debug['logs'].append('')
+        debug['logs'].append(f'[SECTOR_LEVEL] ======================================')
+        debug['logs'].append(f'[SECTOR_LEVEL] STAGE FILTERING (ALWAYS ENABLED FOR SECTOR SCAN)')
+        debug['logs'].append(f'[SECTOR_LEVEL] Filtering by stock stages: {selected_stages}')
+        debug['logs'].append(f'[SECTOR_LEVEL] ======================================')
+        debug['logs'].append('')
+
+        if True:  # Always filter by stages in sector-level scan
+            debug['logs'].append(f'[SECTOR_LEVEL] ✓ Stage filtering ENABLED - will filter by stock stages: {selected_stages}')
+            debug['logs'].append(f'[SECTOR_LEVEL] Analyzing {len(all_stocks)} stocks...')
+            debug['logs'].append('')
+
+            # Track statistics
+            accepted_count = 0
+            rejected_count = 0
+            stocks_by_sector = {}
+
+            # Analyze each stock
+            for stock in all_stocks:
+                stock_stage = stock.current_stage
+                sector_name = stock.sub_sector_obj.sector.name if stock.sub_sector_obj and stock.sub_sector_obj.sector else 'N/A'
+                subsector_name = stock.sub_sector_obj.name if stock.sub_sector_obj else 'N/A'
+
+                if sector_name not in stocks_by_sector:
+                    stocks_by_sector[sector_name] = {'accepted': 0, 'rejected': 0}
+
+                if stock_stage in selected_stages:
+                    # ACCEPTED
+                    accepted_count += 1
+                    stocks_by_sector[sector_name]['accepted'] += 1
+                    debug['logs'].append(
+                        f'✓ ACCEPTED: {stock.tradingsymbol} | '
+                        f'Sector={sector_name}, Subsector={subsector_name}, Stock Stage={stock_stage}'
+                    )
+                else:
+                    # REJECTED
+                    rejected_count += 1
+                    stocks_by_sector[sector_name]['rejected'] += 1
+                    debug['logs'].append(
+                        f'✗ REJECTED: {stock.tradingsymbol} | '
+                        f'Sector={sector_name}, Subsector={subsector_name}, Stock Stage={stock_stage} | '
+                        f'Reason: Stock stage {stock_stage} not in {selected_stages}'
+                    )
+
+            debug['logs'].append('')
+            debug['logs'].append(f'[SECTOR_LEVEL] === FILTERING SUMMARY ===')
+            debug['logs'].append(f'[SECTOR_LEVEL] Total stocks in selected sectors: {len(all_stocks)}')
+            debug['logs'].append(f'[SECTOR_LEVEL] Accepted (matching stage): {accepted_count}')
+            debug['logs'].append(f'[SECTOR_LEVEL] Rejected (wrong stage): {rejected_count}')
+            debug['logs'].append(f'[SECTOR_LEVEL] Breakdown by sector:')
+            for sector_name, counts in stocks_by_sector.items():
+                debug['logs'].append(f'[SECTOR_LEVEL]   {sector_name}: {counts["accepted"]} accepted, {counts["rejected"]} rejected')
+
+            # Apply the filter
+            query = all_stocks_query.filter(Instrument.current_stage.in_(selected_stages))
+            count = query.count()
+
         debug['steps'].append({
-            'description': 'Filter by Selected Sectors',
-            'details': f'{len(selected_sectors)} sectors selected',
-            'criteria': f'Sector IDs: {", ".join(map(str, selected_sectors))}',
+            'description': 'Filter by Selected Sectors' + (f' and Stages {selected_stages}' if selected_stages else ''),
+            'details': f'{len(selected_sectors)} sectors selected: {", ".join(sector_names)}' + (f'. Stock stages: {selected_stages}' if selected_stages else ''),
+            'criteria': f'Sectors: {", ".join(sector_names)}' + (f', Stages: {", ".join(map(str, selected_stages))}' if selected_stages else ''),
             'count': count,
             'passed': count > 0
         })
 
     elif scan_level == 'subsector' and selected_subsectors:
-        debug['logs'].append(f'[STAGE_LEVEL] Filtering by subsectors: {selected_subsectors}')
+        # Get subsector names for logging
+        subsectors = SubSector.query.filter(SubSector.id.in_(selected_subsectors)).all()
+        subsector_names = [f"{ss.name} ({ss.sector.name if ss.sector else 'N/A'})" for ss in subsectors]
 
-        query = query.filter(
+        debug['logs'].append(f'[SUBSECTOR_LEVEL] Filtering by subsectors: {subsector_names}')
+        debug['logs'].append(f'[SUBSECTOR_LEVEL] Subsector IDs: {selected_subsectors}')
+
+        # First, get all stocks from selected subsectors
+        all_stocks_query = query.filter(
             Instrument.sub_sector_id.in_(selected_subsectors)
         )
+        all_stocks = all_stocks_query.all()
 
-        count = query.count()
-        debug['logs'].append(f'[STAGE_LEVEL] After subsector filter: {count} stocks')
+        debug['logs'].append(f'[SUBSECTOR_LEVEL] Found {len(all_stocks)} stocks in selected subsectors')
+        debug['logs'].append('')
+
+        # For subsector-level scan, ALWAYS filter by stages
+        # If no stages selected, default to stages 1 and 2 (Accumulation and Markup)
+        selected_stages = criteria.get('selected_stages', [])
+        if not selected_stages:
+            selected_stages = [1, 2]  # Default to Accumulation and Markup stages
+            debug['logs'].append(f'[SUBSECTOR_LEVEL] No stages selected - defaulting to stages {selected_stages} (Accumulation and Markup)')
+
+        debug['logs'].append('')
+        debug['logs'].append(f'[SUBSECTOR_LEVEL] ======================================')
+        debug['logs'].append(f'[SUBSECTOR_LEVEL] STAGE FILTERING (ALWAYS ENABLED FOR SUBSECTOR SCAN)')
+        debug['logs'].append(f'[SUBSECTOR_LEVEL] Filtering by stock stages: {selected_stages}')
+        debug['logs'].append(f'[SUBSECTOR_LEVEL] ======================================')
+        debug['logs'].append('')
+
+        if True:  # Always filter by stages in subsector-level scan
+            debug['logs'].append(f'[SUBSECTOR_LEVEL] ✓ Stage filtering ENABLED - will filter by stock stages: {selected_stages}')
+            debug['logs'].append(f'[SUBSECTOR_LEVEL] Analyzing {len(all_stocks)} stocks...')
+            debug['logs'].append('')
+
+            # Track statistics
+            accepted_count = 0
+            rejected_count = 0
+            stocks_by_subsector = {}
+
+            # Analyze each stock
+            for stock in all_stocks:
+                stock_stage = stock.current_stage
+                sector_name = stock.sub_sector_obj.sector.name if stock.sub_sector_obj and stock.sub_sector_obj.sector else 'N/A'
+                subsector_name = stock.sub_sector_obj.name if stock.sub_sector_obj else 'N/A'
+
+                if subsector_name not in stocks_by_subsector:
+                    stocks_by_subsector[subsector_name] = {'accepted': 0, 'rejected': 0}
+
+                if stock_stage in selected_stages:
+                    # ACCEPTED
+                    accepted_count += 1
+                    stocks_by_subsector[subsector_name]['accepted'] += 1
+                    debug['logs'].append(
+                        f'✓ ACCEPTED: {stock.tradingsymbol} | '
+                        f'Sector={sector_name}, Subsector={subsector_name}, Stock Stage={stock_stage}'
+                    )
+                else:
+                    # REJECTED
+                    rejected_count += 1
+                    stocks_by_subsector[subsector_name]['rejected'] += 1
+                    debug['logs'].append(
+                        f'✗ REJECTED: {stock.tradingsymbol} | '
+                        f'Sector={sector_name}, Subsector={subsector_name}, Stock Stage={stock_stage} | '
+                        f'Reason: Stock stage {stock_stage} not in {selected_stages}'
+                    )
+
+            debug['logs'].append('')
+            debug['logs'].append(f'[SUBSECTOR_LEVEL] === FILTERING SUMMARY ===')
+            debug['logs'].append(f'[SUBSECTOR_LEVEL] Total stocks in selected subsectors: {len(all_stocks)}')
+            debug['logs'].append(f'[SUBSECTOR_LEVEL] Accepted (matching stage): {accepted_count}')
+            debug['logs'].append(f'[SUBSECTOR_LEVEL] Rejected (wrong stage): {rejected_count}')
+            debug['logs'].append(f'[SUBSECTOR_LEVEL] Breakdown by subsector:')
+            for subsector_name, counts in stocks_by_subsector.items():
+                debug['logs'].append(f'[SUBSECTOR_LEVEL]   {subsector_name}: {counts["accepted"]} accepted, {counts["rejected"]} rejected')
+
+            # Apply the filter
+            query = all_stocks_query.filter(Instrument.current_stage.in_(selected_stages))
+            count = query.count()
+
         debug['steps'].append({
-            'description': 'Filter by Selected Subsectors',
-            'details': f'{len(selected_subsectors)} subsectors selected',
-            'criteria': f'Subsector IDs: {", ".join(map(str, selected_subsectors))}',
+            'description': 'Filter by Selected Subsectors' + (f' and Stages {selected_stages}' if selected_stages else ''),
+            'details': f'{len(selected_subsectors)} subsectors selected' + (f'. Stock stages: {selected_stages}' if selected_stages else ''),
+            'criteria': f'Subsectors: {len(selected_subsectors)} selected' + (f', Stages: {", ".join(map(str, selected_stages))}' if selected_stages else ''),
             'count': count,
             'passed': count > 0
         })
@@ -685,8 +917,8 @@ def _apply_rs_filter_debug(query, criteria):
 
     # Apply RS vs Subsector filters
     if rs_sub_min is not None:
-        query = query.filter(Instrument.rs_subsector >= rs_sub_min)
-        query = query.filter(Instrument.rs_subsector.isnot(None))
+        query = query.filter(Instrument.rs_vs_subsector.isnot(None))
+        query = query.filter(Instrument.rs_vs_subsector >= rs_sub_min)
         count = query.count()
         debug['logs'].append(f'[RS_FILTER] After RS Sub Min >= {rs_sub_min}: {count} stocks')
         debug['steps'].append({
@@ -699,8 +931,8 @@ def _apply_rs_filter_debug(query, criteria):
         initial_count = count
 
     if rs_sub_max is not None:
-        query = query.filter(Instrument.rs_subsector <= rs_sub_max)
-        query = query.filter(Instrument.rs_subsector.isnot(None))
+        query = query.filter(Instrument.rs_vs_subsector.isnot(None))
+        query = query.filter(Instrument.rs_vs_subsector <= rs_sub_max)
         count = query.count()
         debug['logs'].append(f'[RS_FILTER] After RS Sub Max <= {rs_sub_max}: {count} stocks')
         debug['steps'].append({
@@ -714,8 +946,8 @@ def _apply_rs_filter_debug(query, criteria):
 
     # Apply RS vs Sector filters
     if rs_sec_min is not None:
-        query = query.filter(Instrument.rs_sector >= rs_sec_min)
-        query = query.filter(Instrument.rs_sector.isnot(None))
+        query = query.filter(Instrument.rs_vs_sector.isnot(None))
+        query = query.filter(Instrument.rs_vs_sector >= rs_sec_min)
         count = query.count()
         debug['logs'].append(f'[RS_FILTER] After RS Sec Min >= {rs_sec_min}: {count} stocks')
         debug['steps'].append({
@@ -728,8 +960,8 @@ def _apply_rs_filter_debug(query, criteria):
         initial_count = count
 
     if rs_sec_max is not None:
-        query = query.filter(Instrument.rs_sector <= rs_sec_max)
-        query = query.filter(Instrument.rs_sector.isnot(None))
+        query = query.filter(Instrument.rs_vs_sector.isnot(None))
+        query = query.filter(Instrument.rs_vs_sector <= rs_sec_max)
         count = query.count()
         debug['logs'].append(f'[RS_FILTER] After RS Sec Max <= {rs_sec_max}: {count} stocks')
         debug['steps'].append({

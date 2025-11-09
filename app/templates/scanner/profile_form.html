@@ -1430,36 +1430,60 @@
                     </div>
                 </div>
 
-                <!-- Sample Stocks -->
+                <!-- Matched Stocks with Pagination -->
                 ${debugInfo.sample_stocks && debugInfo.sample_stocks.length > 0 ? `
                 <div class="row">
                     <div class="col-12">
-                        <h6 class="mb-3"><i class="bi bi-list-check me-2"></i>Sample Matched Stocks</h6>
+                        <h6 class="mb-3"><i class="bi bi-list-check me-2"></i>Matched Stocks (${debugInfo.matched_stocks} total)</h6>
+
+                        <!-- Pagination Controls (Top) -->
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <label class="small me-2">Rows per page:</label>
+                                <select class="form-select form-select-sm d-inline-block" style="width: auto;" id="rowsPerPage" onchange="updateStocksPagination()">
+                                    <option value="10">10</option>
+                                    <option value="25" selected>25</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                            </div>
+                            <div class="btn-group" id="paginationControls" role="group">
+                                <!-- Pagination buttons will be inserted here -->
+                            </div>
+                        </div>
+
                         <div class="table-responsive">
-                            <table class="table table-sm table-striped">
-                                <thead>
+                            <table class="table table-sm table-striped table-hover">
+                                <thead class="table-light">
                                     <tr>
+                                        <th>#</th>
                                         <th>Symbol</th>
                                         <th>Name</th>
                                         <th>Sector</th>
                                         <th>Subsector</th>
+                                        <th>Stage</th>
+                                        <th>RS Sub</th>
+                                        <th>RS Sec</th>
+                                        <th>Vol Status</th>
+                                        <th>Vol Class</th>
+                                        <th>Vol %</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    ${debugInfo.sample_stocks.map(stock => `
-                                        <tr>
-                                            <td><strong>${stock.tradingsymbol || stock.symbol}</strong></td>
-                                            <td>${stock.name || ''}</td>
-                                            <td>${stock.sector || ''}</td>
-                                            <td>${stock.subsector || ''}</td>
-                                        </tr>
-                                    `).join('')}
+                                <tbody id="stocksTableBody">
+                                    <!-- Rows will be inserted by pagination -->
                                 </tbody>
                             </table>
                         </div>
-                        ${debugInfo.matched_stocks > debugInfo.sample_stocks.length ?
-                            `<p class="small text-muted">Showing ${debugInfo.sample_stocks.length} of ${debugInfo.matched_stocks} matched stocks</p>`
-                            : ''}
+
+                        <!-- Pagination Controls (Bottom) -->
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <div class="text-muted small" id="paginationInfo">
+                                <!-- Page info will be inserted here -->
+                            </div>
+                            <div class="btn-group" id="paginationControlsBottom" role="group">
+                                <!-- Pagination buttons will be inserted here -->
+                            </div>
+                        </div>
                     </div>
                 </div>
                 ` : ''}
@@ -1468,10 +1492,53 @@
                 ${debugInfo.logs && debugInfo.logs.length > 0 ? `
                 <div class="row mt-4">
                     <div class="col-12">
-                        <h6 class="mb-3"><i class="bi bi-terminal me-2"></i>Detailed Logs</h6>
+                        <h6 class="mb-3"><i class="bi bi-terminal me-2"></i>Detailed Logs (${debugInfo.logs.length} entries)</h6>
+
+                        <!-- Log Filter Controls -->
+                        <div class="card mb-2">
+                            <div class="card-body p-2">
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <input type="text" class="form-control form-control-sm" id="logSearchInput"
+                                               placeholder="Search logs... (e.g., symbol name, ACCEPTED, REJECTED)"
+                                               onkeyup="filterLogs()">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="btn-group btn-group-sm w-100" role="group">
+                                            <button type="button" class="btn btn-outline-secondary" onclick="filterLogsByType('all')">
+                                                All (${debugInfo.logs.length})
+                                            </button>
+                                            <button type="button" class="btn btn-outline-success" onclick="filterLogsByType('accepted')">
+                                                ✓ Accepted
+                                            </button>
+                                            <button type="button" class="btn btn-outline-danger" onclick="filterLogsByType('rejected')">
+                                                ✗ Rejected
+                                            </button>
+                                            <button type="button" class="btn btn-outline-info" onclick="filterLogsByType('summary')">
+                                                Summary
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="card">
                             <div class="card-body p-0">
-                                <pre class="mb-0 p-3" style="max-height: 400px; overflow-y: auto; background-color: #1e1e1e; color: #d4d4d4; font-size: 12px;">${debugInfo.logs.join('\n')}</pre>
+                                <pre id="debugLogsContent" class="mb-0 p-3" style="max-height: 600px; overflow-y: auto; background-color: #1e1e1e; color: #d4d4d4; font-size: 11px; line-height: 1.4;">${debugInfo.logs.map(log => {
+                                    if (log.includes('✓ ACCEPTED')) {
+                                        return '<span style="color: #4ade80;">' + log + '</span>';
+                                    } else if (log.includes('✗ REJECTED')) {
+                                        return '<span style="color: #f87171;">' + log + '</span>';
+                                    } else if (log.includes('===') || log.includes('SUMMARY')) {
+                                        return '<span style="color: #60a5fa; font-weight: bold;">' + log + '</span>';
+                                    } else if (log.includes('[INIT]') || log.includes('[RESULT]')) {
+                                        return '<span style="color: #fbbf24; font-weight: bold;">' + log + '</span>';
+                                    } else if (log.includes('[STAGE_LEVEL]') || log.includes('[RS_FILTER]') || log.includes('[MA_FILTER]') || log.includes('[VOLUME_FILTER]')) {
+                                        return '<span style="color: #a78bfa;">' + log + '</span>';
+                                    }
+                                    return log;
+                                }).join('\n')}</pre>
                             </div>
                         </div>
                     </div>
@@ -1481,6 +1548,233 @@
         `;
 
         contentDiv.innerHTML = html;
+
+        // Store original logs for filtering
+        if (debugInfo.logs && debugInfo.logs.length > 0) {
+            window.debugOriginalLogs = debugInfo.logs;
+        }
+
+        // Initialize pagination if there are stocks
+        if (debugInfo.sample_stocks && debugInfo.sample_stocks.length > 0) {
+            window.debugStocksData = debugInfo.sample_stocks; // Store in global variable
+            window.currentStocksPage = 1;
+            updateStocksPagination();
+        }
+    }
+
+    // Store original logs globally
+    window.debugOriginalLogs = [];
+
+    // Filter logs by search text
+    function filterLogs() {
+        const searchText = document.getElementById('logSearchInput').value.toLowerCase();
+        const logsContent = document.getElementById('debugLogsContent');
+
+        if (!window.debugOriginalLogs || !logsContent) return;
+
+        const filteredLogs = window.debugOriginalLogs.filter(log =>
+            log.toLowerCase().includes(searchText)
+        );
+
+        logsContent.innerHTML = filteredLogs.map(log => {
+            if (log.includes('✓ ACCEPTED')) {
+                return '<span style="color: #4ade80;">' + log + '</span>';
+            } else if (log.includes('✗ REJECTED')) {
+                return '<span style="color: #f87171;">' + log + '</span>';
+            } else if (log.includes('===') || log.includes('SUMMARY')) {
+                return '<span style="color: #60a5fa; font-weight: bold;">' + log + '</span>';
+            } else if (log.includes('[INIT]') || log.includes('[RESULT]')) {
+                return '<span style="color: #fbbf24; font-weight: bold;">' + log + '</span>';
+            } else if (log.includes('[STAGE_LEVEL]') || log.includes('[RS_FILTER]') || log.includes('[MA_FILTER]') || log.includes('[VOLUME_FILTER]')) {
+                return '<span style="color: #a78bfa;">' + log + '</span>';
+            }
+            return log;
+        }).join('\n');
+    }
+
+    // Filter logs by type
+    function filterLogsByType(type) {
+        const logsContent = document.getElementById('debugLogsContent');
+        const searchInput = document.getElementById('logSearchInput');
+
+        if (!window.debugOriginalLogs || !logsContent) return;
+
+        // Clear search input
+        searchInput.value = '';
+
+        let filteredLogs;
+
+        if (type === 'all') {
+            filteredLogs = window.debugOriginalLogs;
+        } else if (type === 'accepted') {
+            filteredLogs = window.debugOriginalLogs.filter(log => log.includes('✓ ACCEPTED'));
+        } else if (type === 'rejected') {
+            filteredLogs = window.debugOriginalLogs.filter(log => log.includes('✗ REJECTED'));
+        } else if (type === 'summary') {
+            filteredLogs = window.debugOriginalLogs.filter(log =>
+                log.includes('===') ||
+                log.includes('SUMMARY') ||
+                log.includes('[INIT]') ||
+                log.includes('[RESULT]') ||
+                log.includes('Total stocks') ||
+                log.includes('Accepted:') ||
+                log.includes('Rejected:') ||
+                log.includes('breakdown')
+            );
+        }
+
+        logsContent.innerHTML = filteredLogs.map(log => {
+            if (log.includes('✓ ACCEPTED')) {
+                return '<span style="color: #4ade80;">' + log + '</span>';
+            } else if (log.includes('✗ REJECTED')) {
+                return '<span style="color: #f87171;">' + log + '</span>';
+            } else if (log.includes('===') || log.includes('SUMMARY')) {
+                return '<span style="color: #60a5fa; font-weight: bold;">' + log + '</span>';
+            } else if (log.includes('[INIT]') || log.includes('[RESULT]')) {
+                return '<span style="color: #fbbf24; font-weight: bold;">' + log + '</span>';
+            } else if (log.includes('[STAGE_LEVEL]') || log.includes('[RS_FILTER]') || log.includes('[MA_FILTER]') || log.includes('[VOLUME_FILTER]')) {
+                return '<span style="color: #a78bfa;">' + log + '</span>';
+            }
+            return log;
+        }).join('\n');
+    }
+
+    // Pagination state
+    window.debugStocksData = [];
+    window.currentStocksPage = 1;
+
+    // Update stocks table with pagination
+    function updateStocksPagination() {
+        const stocks = window.debugStocksData || [];
+        if (stocks.length === 0) return;
+
+        const rowsPerPage = parseInt(document.getElementById('rowsPerPage').value) || 25;
+        const currentPage = window.currentStocksPage || 1;
+        const totalPages = Math.ceil(stocks.length / rowsPerPage);
+
+        // Ensure current page is valid
+        if (currentPage > totalPages) {
+            window.currentStocksPage = totalPages;
+        }
+        if (currentPage < 1) {
+            window.currentStocksPage = 1;
+        }
+
+        const startIdx = (window.currentStocksPage - 1) * rowsPerPage;
+        const endIdx = Math.min(startIdx + rowsPerPage, stocks.length);
+        const pageStocks = stocks.slice(startIdx, endIdx);
+
+        // Update table body
+        const tbody = document.getElementById('stocksTableBody');
+        if (!tbody) return;
+
+        tbody.innerHTML = pageStocks.map((stock, idx) => {
+            const globalIdx = startIdx + idx + 1;
+            const stageClass = stock.current_stage === 1 ? 'primary' :
+                              stock.current_stage === 2 ? 'success' :
+                              stock.current_stage === 3 ? 'warning' :
+                              stock.current_stage === 4 ? 'danger' : 'secondary';
+
+            return `
+                <tr>
+                    <td>${globalIdx}</td>
+                    <td><strong>${stock.tradingsymbol || ''}</strong></td>
+                    <td>${stock.name || ''}</td>
+                    <td><small>${stock.sector || ''}</small></td>
+                    <td><small>${stock.subsector || ''}</small></td>
+                    <td>${stock.current_stage ? `<span class="badge bg-${stageClass}">${stock.current_stage}</span>` : '-'}</td>
+                    <td>${stock.rs_vs_subsector !== null && stock.rs_vs_subsector !== undefined ? stock.rs_vs_subsector : '-'}</td>
+                    <td>${stock.rs_vs_sector !== null && stock.rs_vs_sector !== undefined ? stock.rs_vs_sector : '-'}</td>
+                    <td><small>${stock.volume_dryup_status || '-'}</small></td>
+                    <td><small>${stock.volume_dryup_classification || '-'}</small></td>
+                    <td>${stock.volume_ratio_pct !== null && stock.volume_ratio_pct !== undefined ? stock.volume_ratio_pct + '%' : '-'}</td>
+                </tr>
+            `;
+        }).join('');
+
+        // Update pagination info
+        const paginationInfo = document.getElementById('paginationInfo');
+        if (paginationInfo) {
+            paginationInfo.textContent = `Showing ${startIdx + 1}-${endIdx} of ${stocks.length} stocks`;
+        }
+
+        // Update pagination buttons (both top and bottom)
+        updatePaginationButtons(totalPages);
+    }
+
+    // Update pagination buttons
+    function updatePaginationButtons(totalPages) {
+        const currentPage = window.currentStocksPage || 1;
+        let buttonsHtml = '';
+
+        // Previous button
+        buttonsHtml += `
+            <button class="btn btn-sm btn-outline-primary"
+                    ${currentPage === 1 ? 'disabled' : ''}
+                    onclick="goToStocksPage(${currentPage - 1})">
+                <i class="bi bi-chevron-left"></i> Previous
+            </button>
+        `;
+
+        // Page numbers (show current page and a few around it)
+        const maxButtons = 5;
+        let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+        let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+
+        // Adjust start if we're near the end
+        if (endPage - startPage < maxButtons - 1) {
+            startPage = Math.max(1, endPage - maxButtons + 1);
+        }
+
+        // First page if not in range
+        if (startPage > 1) {
+            buttonsHtml += `
+                <button class="btn btn-sm btn-outline-primary" onclick="goToStocksPage(1)">1</button>
+            `;
+            if (startPage > 2) {
+                buttonsHtml += `<button class="btn btn-sm btn-outline-primary" disabled>...</button>`;
+            }
+        }
+
+        // Page number buttons
+        for (let i = startPage; i <= endPage; i++) {
+            buttonsHtml += `
+                <button class="btn btn-sm ${i === currentPage ? 'btn-primary' : 'btn-outline-primary'}"
+                        onclick="goToStocksPage(${i})">${i}</button>
+            `;
+        }
+
+        // Last page if not in range
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                buttonsHtml += `<button class="btn btn-sm btn-outline-primary" disabled>...</button>`;
+            }
+            buttonsHtml += `
+                <button class="btn btn-sm btn-outline-primary" onclick="goToStocksPage(${totalPages})">${totalPages}</button>
+            `;
+        }
+
+        // Next button
+        buttonsHtml += `
+            <button class="btn btn-sm btn-outline-primary"
+                    ${currentPage === totalPages ? 'disabled' : ''}
+                    onclick="goToStocksPage(${currentPage + 1})">
+                Next <i class="bi bi-chevron-right"></i>
+            </button>
+        `;
+
+        // Update both pagination controls
+        const topControls = document.getElementById('paginationControls');
+        const bottomControls = document.getElementById('paginationControlsBottom');
+
+        if (topControls) topControls.innerHTML = buttonsHtml;
+        if (bottomControls) bottomControls.innerHTML = buttonsHtml;
+    }
+
+    // Navigate to a specific page
+    function goToStocksPage(pageNum) {
+        window.currentStocksPage = pageNum;
+        updateStocksPagination();
     }
 
     // Helper function to get filter display name
