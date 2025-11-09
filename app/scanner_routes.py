@@ -409,6 +409,109 @@ def get_results():
         }), 500
 
 
+@scanner_bp.route('/debug-filter', methods=['POST'])
+@login_required
+def debug_filter():
+    """
+    Debug a single filter by running it and returning detailed step-by-step logs
+    """
+    try:
+        data = request.get_json() or {}
+        filter_type = data.get('filter_type')
+        criteria = data.get('criteria', {})
+
+        if not filter_type:
+            return jsonify({
+                'success': False,
+                'error': 'Filter type is required'
+            }), 400
+
+        current_app.logger.info(f'Debug run for filter: {filter_type}, criteria: {criteria}')
+
+        # Import here to avoid circular imports
+        from app.models import Sector
+
+        # Initialize debug info structure
+        debug_info = {
+            'total_stocks': 0,
+            'matched_stocks': 0,
+            'eliminated_stocks': 0,
+            'steps': [],
+            'sample_stocks': [],
+            'logs': []
+        }
+
+        # Start with all NIFTY 500 stocks
+        query = Instrument.query.filter_by(
+            exchange='NSE',
+            instrument_type='EQ',
+            is_nifty500=True
+        )
+
+        initial_count = query.count()
+        debug_info['total_stocks'] = initial_count
+        debug_info['logs'].append(f'[INIT] Starting with {initial_count} NIFTY 500 stocks')
+
+        # Apply the selected filter
+        if filter_type == 'stage_level':
+            query, filter_debug = _apply_stage_level_filter_debug(query, criteria)
+            debug_info['steps'].extend(filter_debug['steps'])
+            debug_info['logs'].extend(filter_debug['logs'])
+
+        elif filter_type == 'rs':
+            query, filter_debug = _apply_rs_filter_debug(query, criteria)
+            debug_info['steps'].extend(filter_debug['steps'])
+            debug_info['logs'].extend(filter_debug['logs'])
+
+        elif filter_type == 'ma':
+            query, filter_debug = _apply_ma_filter_debug(query, criteria)
+            debug_info['steps'].extend(filter_debug['steps'])
+            debug_info['logs'].extend(filter_debug['logs'])
+
+        elif filter_type == 'volume':
+            query, filter_debug = _apply_volume_filter_debug(query, criteria)
+            debug_info['steps'].extend(filter_debug['steps'])
+            debug_info['logs'].extend(filter_debug['logs'])
+
+        elif filter_type == 'price_action':
+            query, filter_debug = _apply_price_action_filter_debug(query, criteria)
+            debug_info['steps'].extend(filter_debug['steps'])
+            debug_info['logs'].extend(filter_debug['logs'])
+
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Unknown filter type: {filter_type}'
+            }), 400
+
+        # Get final results
+        matched_stocks = query.all()
+        debug_info['matched_stocks'] = len(matched_stocks)
+        debug_info['eliminated_stocks'] = initial_count - len(matched_stocks)
+        debug_info['logs'].append(f'[RESULT] Matched: {len(matched_stocks)}, Eliminated: {debug_info["eliminated_stocks"]}')
+
+        # Get sample stocks (first 10)
+        for stock in matched_stocks[:10]:
+            debug_info['sample_stocks'].append({
+                'tradingsymbol': stock.tradingsymbol,
+                'name': stock.name,
+                'sector': stock.subsector.sector.name if stock.subsector and stock.subsector.sector else '',
+                'subsector': stock.subsector.name if stock.subsector else ''
+            })
+
+        return jsonify({
+            'success': True,
+            'debug_info': debug_info
+        })
+
+    except Exception as e:
+        current_app.logger.error(f'Error in debug filter: {str(e)}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 # Helper Functions
 
 def _get_sectors_subsectors_data():
@@ -483,3 +586,288 @@ def _get_sectors_subsectors_data():
         'stage_sector_counts': stage_sector_counts,
         'all_sectors': sectors
     }
+
+
+# Debug Filter Helper Functions
+
+def _apply_stage_level_filter_debug(query, criteria):
+    """Apply stage level filter with detailed debugging"""
+    debug = {'steps': [], 'logs': []}
+
+    scan_level = criteria.get('scan_level', 'subsector')
+    selected_stages = criteria.get('selected_stages', [])
+    selected_sectors = criteria.get('selected_sectors', [])
+    selected_subsectors = criteria.get('selected_subsectors', [])
+
+    debug['logs'].append(f'[STAGE_LEVEL] Scan level: {scan_level}')
+
+    if scan_level == 'stage' and selected_stages:
+        debug['logs'].append(f'[STAGE_LEVEL] Filtering by stages: {selected_stages}')
+
+        from app.models import Sector
+        query = query.join(SubSector, Instrument.sub_sector_id == SubSector.id).join(
+            Sector, SubSector.sector_id == Sector.id
+        ).filter(
+            SubSector.current_stage.in_(selected_stages),
+            Sector.current_stage.in_(selected_stages)
+        )
+
+        count = query.count()
+        debug['logs'].append(f'[STAGE_LEVEL] After stage filter: {count} stocks')
+        debug['steps'].append({
+            'description': 'Filter by Weinstein Stages',
+            'details': f'Stocks in stages {selected_stages} (both sector and subsector must match)',
+            'criteria': f'Stages: {", ".join(map(str, selected_stages))}',
+            'count': count,
+            'passed': count > 0
+        })
+
+    elif scan_level == 'sector' and selected_sectors:
+        debug['logs'].append(f'[STAGE_LEVEL] Filtering by sectors: {selected_sectors}')
+
+        query = query.join(SubSector, Instrument.sub_sector_id == SubSector.id).filter(
+            SubSector.sector_id.in_(selected_sectors)
+        )
+
+        count = query.count()
+        debug['logs'].append(f'[STAGE_LEVEL] After sector filter: {count} stocks')
+        debug['steps'].append({
+            'description': 'Filter by Selected Sectors',
+            'details': f'{len(selected_sectors)} sectors selected',
+            'criteria': f'Sector IDs: {", ".join(map(str, selected_sectors))}',
+            'count': count,
+            'passed': count > 0
+        })
+
+    elif scan_level == 'subsector' and selected_subsectors:
+        debug['logs'].append(f'[STAGE_LEVEL] Filtering by subsectors: {selected_subsectors}')
+
+        query = query.filter(
+            Instrument.sub_sector_id.in_(selected_subsectors)
+        )
+
+        count = query.count()
+        debug['logs'].append(f'[STAGE_LEVEL] After subsector filter: {count} stocks')
+        debug['steps'].append({
+            'description': 'Filter by Selected Subsectors',
+            'details': f'{len(selected_subsectors)} subsectors selected',
+            'criteria': f'Subsector IDs: {", ".join(map(str, selected_subsectors))}',
+            'count': count,
+            'passed': count > 0
+        })
+
+    else:
+        debug['logs'].append(f'[STAGE_LEVEL] No filter applied - scanning all stocks')
+        count = query.count()
+        debug['steps'].append({
+            'description': 'No Stage Level Filter Applied',
+            'details': 'Scanning all NIFTY 500 stocks',
+            'count': count,
+            'passed': True
+        })
+
+    return query, debug
+
+
+def _apply_rs_filter_debug(query, criteria):
+    """Apply RS filter with detailed debugging"""
+    debug = {'steps': [], 'logs': []}
+
+    rs_sub_min = criteria.get('rs_sub_min')
+    rs_sub_max = criteria.get('rs_sub_max')
+    rs_sec_min = criteria.get('rs_sec_min')
+    rs_sec_max = criteria.get('rs_sec_max')
+
+    debug['logs'].append(f'[RS_FILTER] RS Sub range: [{rs_sub_min}, {rs_sub_max}]')
+    debug['logs'].append(f'[RS_FILTER] RS Sec range: [{rs_sec_min}, {rs_sec_max}]')
+
+    initial_count = query.count()
+
+    # Apply RS vs Subsector filters
+    if rs_sub_min is not None:
+        query = query.filter(Instrument.rs_subsector >= rs_sub_min)
+        query = query.filter(Instrument.rs_subsector.isnot(None))
+        count = query.count()
+        debug['logs'].append(f'[RS_FILTER] After RS Sub Min >= {rs_sub_min}: {count} stocks')
+        debug['steps'].append({
+            'description': f'RS vs Subsector >= {rs_sub_min}',
+            'details': f'Eliminated {initial_count - count} stocks below minimum',
+            'criteria': f'Minimum RS vs Subsector: {rs_sub_min}',
+            'count': count,
+            'passed': count > 0
+        })
+        initial_count = count
+
+    if rs_sub_max is not None:
+        query = query.filter(Instrument.rs_subsector <= rs_sub_max)
+        query = query.filter(Instrument.rs_subsector.isnot(None))
+        count = query.count()
+        debug['logs'].append(f'[RS_FILTER] After RS Sub Max <= {rs_sub_max}: {count} stocks')
+        debug['steps'].append({
+            'description': f'RS vs Subsector <= {rs_sub_max}',
+            'details': f'Eliminated {initial_count - count} stocks above maximum',
+            'criteria': f'Maximum RS vs Subsector: {rs_sub_max}',
+            'count': count,
+            'passed': count > 0
+        })
+        initial_count = count
+
+    # Apply RS vs Sector filters
+    if rs_sec_min is not None:
+        query = query.filter(Instrument.rs_sector >= rs_sec_min)
+        query = query.filter(Instrument.rs_sector.isnot(None))
+        count = query.count()
+        debug['logs'].append(f'[RS_FILTER] After RS Sec Min >= {rs_sec_min}: {count} stocks')
+        debug['steps'].append({
+            'description': f'RS vs Sector >= {rs_sec_min}',
+            'details': f'Eliminated {initial_count - count} stocks below minimum',
+            'criteria': f'Minimum RS vs Sector: {rs_sec_min}',
+            'count': count,
+            'passed': count > 0
+        })
+        initial_count = count
+
+    if rs_sec_max is not None:
+        query = query.filter(Instrument.rs_sector <= rs_sec_max)
+        query = query.filter(Instrument.rs_sector.isnot(None))
+        count = query.count()
+        debug['logs'].append(f'[RS_FILTER] After RS Sec Max <= {rs_sec_max}: {count} stocks')
+        debug['steps'].append({
+            'description': f'RS vs Sector <= {rs_sec_max}',
+            'details': f'Eliminated {initial_count - count} stocks above maximum',
+            'criteria': f'Maximum RS vs Sector: {rs_sec_max}',
+            'count': count,
+            'passed': count > 0
+        })
+
+    if not rs_sub_min and not rs_sub_max and not rs_sec_min and not rs_sec_max:
+        debug['logs'].append(f'[RS_FILTER] No RS filter applied')
+        count = query.count()
+        debug['steps'].append({
+            'description': 'No RS Filter Applied',
+            'details': 'No RS criteria specified',
+            'count': count,
+            'passed': True
+        })
+
+    return query, debug
+
+
+def _apply_ma_filter_debug(query, criteria):
+    """Apply MA filter with detailed debugging"""
+    debug = {'steps': [], 'logs': []}
+
+    selected_sma = criteria.get('selected_sma', [])
+    selected_ema = criteria.get('selected_ema', [])
+
+    debug['logs'].append(f'[MA_FILTER] Selected SMA: {selected_sma}')
+    debug['logs'].append(f'[MA_FILTER] Selected EMA: {selected_ema}')
+
+    if not selected_sma and not selected_ema:
+        debug['logs'].append(f'[MA_FILTER] No MA filter applied')
+        count = query.count()
+        debug['steps'].append({
+            'description': 'No Moving Average Filter Applied',
+            'details': 'No moving averages selected',
+            'count': count,
+            'passed': True
+        })
+    else:
+        # NOTE: MA filtering logic not yet implemented in backend
+        # This is a placeholder for when MA data becomes available
+        count = query.count()
+        debug['logs'].append(f'[MA_FILTER] MA filtering not yet implemented - returning all stocks')
+        debug['steps'].append({
+            'description': 'Moving Average Filter (Not Implemented)',
+            'details': f'Selected: SMA {selected_sma}, EMA {selected_ema}',
+            'criteria': 'Price above selected MAs (feature pending)',
+            'count': count,
+            'passed': False
+        })
+
+    return query, debug
+
+
+def _apply_volume_filter_debug(query, criteria):
+    """Apply volume contraction filter with detailed debugging"""
+    debug = {'steps': [], 'logs': []}
+
+    selected_volume_status = criteria.get('selected_volume_status', [])
+    selected_volume_classification = criteria.get('selected_volume_classification', [])
+
+    debug['logs'].append(f'[VOLUME_FILTER] Volume Status: {selected_volume_status}')
+    debug['logs'].append(f'[VOLUME_FILTER] Volume Classification: {selected_volume_classification}')
+
+    initial_count = query.count()
+
+    if selected_volume_status:
+        query = query.filter(Instrument.volume_dryup_status.in_(selected_volume_status))
+        query = query.filter(Instrument.volume_dryup_status.isnot(None))
+        count = query.count()
+        debug['logs'].append(f'[VOLUME_FILTER] After volume status filter: {count} stocks')
+        debug['steps'].append({
+            'description': 'Filter by Volume Dry-Up Status',
+            'details': f'Eliminated {initial_count - count} stocks not matching status',
+            'criteria': f'Status: {", ".join(selected_volume_status)}',
+            'count': count,
+            'passed': count > 0
+        })
+        initial_count = count
+
+    if selected_volume_classification:
+        query = query.filter(Instrument.volume_dryup_classification.in_(selected_volume_classification))
+        query = query.filter(Instrument.volume_dryup_classification.isnot(None))
+        count = query.count()
+        debug['logs'].append(f'[VOLUME_FILTER] After volume classification filter: {count} stocks')
+        debug['steps'].append({
+            'description': 'Filter by Volume Dry-Up Classification',
+            'details': f'Eliminated {initial_count - count} stocks not matching classification',
+            'criteria': f'Classification: {", ".join(selected_volume_classification)}',
+            'count': count,
+            'passed': count > 0
+        })
+
+    if not selected_volume_status and not selected_volume_classification:
+        debug['logs'].append(f'[VOLUME_FILTER] No volume filter applied')
+        count = query.count()
+        debug['steps'].append({
+            'description': 'No Volume Contraction Filter Applied',
+            'details': 'No volume criteria specified',
+            'count': count,
+            'passed': True
+        })
+
+    return query, debug
+
+
+def _apply_price_action_filter_debug(query, criteria):
+    """Apply price action filter with detailed debugging"""
+    debug = {'steps': [], 'logs': []}
+
+    selected_strategies = criteria.get('selected_price_action_strategies', [])
+
+    debug['logs'].append(f'[PRICE_ACTION] Selected Strategies: {selected_strategies}')
+
+    if not selected_strategies:
+        debug['logs'].append(f'[PRICE_ACTION] No price action filter applied')
+        count = query.count()
+        debug['steps'].append({
+            'description': 'No Price Action Filter Applied',
+            'details': 'No price action strategies selected',
+            'count': count,
+            'passed': True
+        })
+    else:
+        # NOTE: Price action filtering logic not yet implemented in backend
+        # This is a placeholder for when price action analysis becomes available
+        count = query.count()
+        debug['logs'].append(f'[PRICE_ACTION] Price action filtering not yet implemented - returning all stocks')
+        debug['steps'].append({
+            'description': 'Price Action Filter (Not Implemented)',
+            'details': f'Selected strategies: {", ".join(selected_strategies)}',
+            'criteria': 'Breakout/Pullback patterns (feature pending)',
+            'count': count,
+            'passed': False
+        })
+
+    return query, debug

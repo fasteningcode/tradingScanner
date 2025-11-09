@@ -71,11 +71,16 @@
                 <div class="card-header bg-primary text-white">
                     <div class="d-flex justify-content-between align-items-center">
                         <h6 class="mb-0"><i class="bi bi-funnel me-2"></i>Stage Level Filter</h6>
-                        <div class="form-check form-switch mb-0">
-                            <input class="form-check-input" type="checkbox" id="enableScanLevelFilter" checked onclick="toggleScanLevelFilterSection()">
-                            <label class="form-check-label text-white" for="enableScanLevelFilter">
-                                Enable
-                            </label>
+                        <div class="d-flex align-items-center gap-2">
+                            <button type="button" class="btn btn-sm btn-light" onclick="debugRunFilter('stage_level')" title="Debug Run - See detailed logs">
+                                <i class="bi bi-bug me-1"></i>Debug
+                            </button>
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" id="enableScanLevelFilter" checked onclick="toggleScanLevelFilterSection()">
+                                <label class="form-check-label text-white" for="enableScanLevelFilter">
+                                    Enable
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -343,11 +348,16 @@
                 <div class="card-header bg-success text-white">
                     <div class="d-flex justify-content-between align-items-center">
                         <h6 class="mb-0"><i class="bi bi-graph-up me-2"></i>Relative Strength Filter</h6>
-                        <div class="form-check form-switch mb-0">
-                            <input class="form-check-input" type="checkbox" id="enableRsFilter" onclick="toggleRsFilterSection()">
-                            <label class="form-check-label text-white" for="enableRsFilter">
-                                Enable
-                            </label>
+                        <div class="d-flex align-items-center gap-2">
+                            <button type="button" class="btn btn-sm btn-light" onclick="debugRunFilter('rs')" title="Debug Run - See detailed logs">
+                                <i class="bi bi-bug me-1"></i>Debug
+                            </button>
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" id="enableRsFilter" onclick="toggleRsFilterSection()">
+                                <label class="form-check-label text-white" for="enableRsFilter">
+                                    Enable
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -408,11 +418,16 @@
                 <div class="card-header bg-info text-white">
                     <div class="d-flex justify-content-between align-items-center">
                         <h6 class="mb-0"><i class="bi bi-graph-up-arrow me-2"></i>Moving Averages Filter</h6>
-                        <div class="form-check form-switch mb-0">
-                            <input class="form-check-input" type="checkbox" id="enableMaFilter" onclick="toggleMaFilterSection()">
-                            <label class="form-check-label text-white" for="enableMaFilter">
-                                Enable
-                            </label>
+                        <div class="d-flex align-items-center gap-2">
+                            <button type="button" class="btn btn-sm btn-light" onclick="debugRunFilter('ma')" title="Debug Run - See detailed logs">
+                                <i class="bi bi-bug me-1"></i>Debug
+                            </button>
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" id="enableMaFilter" onclick="toggleMaFilterSection()">
+                                <label class="form-check-label text-white" for="enableMaFilter">
+                                    Enable
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -521,9 +536,14 @@
                 <div class="card-header bg-warning text-dark">
                     <div class="d-flex justify-content-between align-items-center">
                         <h6 class="mb-0"><i class="bi bi-soundwave me-2"></i>Volume Contraction Filter</h6>
-                        <div class="form-check form-switch mb-0">
-                            <input class="form-check-input" type="checkbox" id="enableVolumeContractionFilter" onclick="toggleVolumeContractionFilterSection()">
-                            <label class="form-check-label" for="enableVolumeContractionFilter">Enable</label>
+                        <div class="d-flex align-items-center gap-2">
+                            <button type="button" class="btn btn-sm btn-light" onclick="debugRunFilter('volume')" title="Debug Run - See detailed logs">
+                                <i class="bi bi-bug me-1"></i>Debug
+                            </button>
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" id="enableVolumeContractionFilter" onclick="toggleVolumeContractionFilterSection()">
+                                <label class="form-check-label" for="enableVolumeContractionFilter">Enable</label>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -611,9 +631,14 @@
                 <div class="card-header bg-danger text-white">
                     <div class="d-flex justify-content-between align-items-center">
                         <h6 class="mb-0"><i class="bi bi-bar-chart-line me-2"></i>Price Action Strategies</h6>
-                        <div class="form-check form-switch mb-0">
-                            <input class="form-check-input" type="checkbox" id="enablePriceActionFilter" onclick="togglePriceActionFilterSection()">
-                            <label class="form-check-label text-white" for="enablePriceActionFilter">Enable</label>
+                        <div class="d-flex align-items-center gap-2">
+                            <button type="button" class="btn btn-sm btn-light" onclick="debugRunFilter('price_action')" title="Debug Run - See detailed logs">
+                                <i class="bi bi-bug me-1"></i>Debug
+                            </button>
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" id="enablePriceActionFilter" onclick="togglePriceActionFilterSection()">
+                                <label class="form-check-label text-white" for="enablePriceActionFilter">Enable</label>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -687,6 +712,34 @@
         </div>
     </div>
 </form>
+
+<!-- Debug Results Modal -->
+<div class="modal fade" id="debugResultsModal" tabindex="-1" aria-labelledby="debugResultsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title" id="debugResultsModalLabel">
+                    <i class="bi bi-bug me-2"></i>Debug Results
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="debugResultsContent">
+                <!-- Loading state -->
+                <div class="text-center py-5" id="debugLoading">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Running debug...</span>
+                    </div>
+                    <p class="mt-3 text-muted">Running filter debug...</p>
+                </div>
+
+                <!-- Results will be dynamically inserted here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 {% endblock %}
 
@@ -1226,5 +1279,216 @@
             }
         }
     });
+
+    // Debug Run Filter Function
+    function debugRunFilter(filterType) {
+        console.log('Debug run for filter:', filterType);
+
+        // Collect current criteria
+        const criteriaField = document.getElementById('criteria_json');
+        updateSelections(); // Make sure criteria is up-to-date
+
+        const criteria = JSON.parse(criteriaField.value || '{}');
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('debugResultsModal'));
+        modal.show();
+
+        // Reset modal content to loading state
+        const contentDiv = document.getElementById('debugResultsContent');
+        contentDiv.innerHTML = `
+            <div class="text-center py-5" id="debugLoading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Running debug...</span>
+                </div>
+                <p class="mt-3 text-muted">Running ${filterType} filter debug...</p>
+            </div>
+        `;
+
+        // Make AJAX request to debug endpoint
+        fetch('/scanner/debug-filter', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                filter_type: filterType,
+                criteria: criteria
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayDebugResults(data.debug_info, filterType);
+            } else {
+                contentDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Error:</strong> ${data.error || 'Unknown error occurred'}
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Debug run error:', error);
+            contentDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Error:</strong> ${error.message}
+                </div>
+            `;
+        });
+    }
+
+    // Display debug results in the modal
+    function displayDebugResults(debugInfo, filterType) {
+        const contentDiv = document.getElementById('debugResultsContent');
+
+        let html = `
+            <div class="container-fluid">
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            <h6 class="mb-2"><i class="bi bi-info-circle me-2"></i>Filter: ${getFilterName(filterType)}</h6>
+                            <p class="mb-0 small">This debug run shows the step-by-step filtering process and results.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Cards -->
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h3 class="text-primary mb-0">${debugInfo.total_stocks || 0}</h3>
+                                <p class="text-muted mb-0 small">Initial Stock Count</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h3 class="text-success mb-0">${debugInfo.matched_stocks || 0}</h3>
+                                <p class="text-muted mb-0 small">Stocks Matched</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h3 class="text-danger mb-0">${debugInfo.eliminated_stocks || 0}</h3>
+                                <p class="text-muted mb-0 small">Stocks Eliminated</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filter Steps -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <h6 class="mb-3"><i class="bi bi-list-ol me-2"></i>Filter Steps</h6>
+                        <div class="list-group">
+        `;
+
+        // Add filter steps
+        if (debugInfo.steps && debugInfo.steps.length > 0) {
+            debugInfo.steps.forEach((step, index) => {
+                const iconClass = step.passed ? 'check-circle text-success' : 'x-circle text-danger';
+                html += `
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">
+                                    <span class="badge bg-secondary me-2">Step ${index + 1}</span>
+                                    ${step.description}
+                                </h6>
+                                <p class="mb-1 small text-muted">${step.details || ''}</p>
+                                ${step.criteria ? `<p class="mb-0 small"><strong>Criteria:</strong> ${step.criteria}</p>` : ''}
+                            </div>
+                            <div class="text-end ms-3">
+                                <i class="bi bi-${iconClass} fs-4"></i>
+                                ${step.count !== undefined ? `<p class="mb-0 small"><strong>${step.count}</strong> stocks</p>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        } else {
+            html += `
+                <div class="list-group-item">
+                    <p class="mb-0 text-muted">No filter steps recorded.</p>
+                </div>
+            `;
+        }
+
+        html += `
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sample Stocks -->
+                ${debugInfo.sample_stocks && debugInfo.sample_stocks.length > 0 ? `
+                <div class="row">
+                    <div class="col-12">
+                        <h6 class="mb-3"><i class="bi bi-list-check me-2"></i>Sample Matched Stocks</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Symbol</th>
+                                        <th>Name</th>
+                                        <th>Sector</th>
+                                        <th>Subsector</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${debugInfo.sample_stocks.map(stock => `
+                                        <tr>
+                                            <td><strong>${stock.tradingsymbol || stock.symbol}</strong></td>
+                                            <td>${stock.name || ''}</td>
+                                            <td>${stock.sector || ''}</td>
+                                            <td>${stock.subsector || ''}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                        ${debugInfo.matched_stocks > debugInfo.sample_stocks.length ?
+                            `<p class="small text-muted">Showing ${debugInfo.sample_stocks.length} of ${debugInfo.matched_stocks} matched stocks</p>`
+                            : ''}
+                    </div>
+                </div>
+                ` : ''}
+
+                <!-- Detailed Logs -->
+                ${debugInfo.logs && debugInfo.logs.length > 0 ? `
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <h6 class="mb-3"><i class="bi bi-terminal me-2"></i>Detailed Logs</h6>
+                        <div class="card">
+                            <div class="card-body p-0">
+                                <pre class="mb-0 p-3" style="max-height: 400px; overflow-y: auto; background-color: #1e1e1e; color: #d4d4d4; font-size: 12px;">${debugInfo.logs.join('\n')}</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
+            </div>
+        `;
+
+        contentDiv.innerHTML = html;
+    }
+
+    // Helper function to get filter display name
+    function getFilterName(filterType) {
+        const names = {
+            'stage_level': 'Stage Level Filter',
+            'rs': 'Relative Strength Filter',
+            'ma': 'Moving Averages Filter',
+            'volume': 'Volume Contraction Filter',
+            'price_action': 'Price Action Strategies Filter'
+        };
+        return names[filterType] || filterType;
+    }
 </script>
 {% endblock %}
