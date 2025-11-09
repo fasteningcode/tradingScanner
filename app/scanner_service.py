@@ -275,34 +275,112 @@ class Scanner:
             ).all()
 
         scan_level = criteria.get('scan_level', 'subsector')
+        selected_stages = criteria.get('selected_stages', [])
         selected_sectors = criteria.get('selected_sectors', [])
         selected_subsectors = criteria.get('selected_subsectors', [])
 
+        # Get enable/disable flags
+        enable_scan_level_filter = criteria.get('enable_scan_level_filter', True)
+        enable_rs_filter = criteria.get('enable_rs_filter', False)
+        enable_volume_contraction_filter = criteria.get('enable_volume_contraction_filter', False)
+
+        # Get RS filter values
+        rs_sub_min = criteria.get('rs_sub_min')
+        rs_sub_max = criteria.get('rs_sub_max')
+        rs_sec_min = criteria.get('rs_sec_min')
+        rs_sec_max = criteria.get('rs_sec_max')
+
+        # Get Volume Contraction filter values
+        selected_volume_status = criteria.get('selected_volume_status', [])
+        selected_volume_classification = criteria.get('selected_volume_classification', [])
+
         current_app.logger.info(
             f'Scanner task {self.task_id}: Criteria - Level: {scan_level}, '
-            f'Sectors: {selected_sectors}, Subsectors: {selected_subsectors}'
+            f'Stages: {selected_stages}, Sectors: {selected_sectors}, Subsectors: {selected_subsectors}, '
+            f'Enable Scan Level Filter: {enable_scan_level_filter}, Enable RS Filter: {enable_rs_filter}, '
+            f'RS Sub: [{rs_sub_min}, {rs_sub_max}], RS Sec: [{rs_sec_min}, {rs_sec_max}], '
+            f'Enable Volume Contraction Filter: {enable_volume_contraction_filter}, '
+            f'Volume Status: {selected_volume_status}, Volume Classification: {selected_volume_classification}'
         )
 
-        # Build query based on scan level
+        # Build query based on scan level (only if scan level filter is enabled)
         query = Instrument.query.filter_by(
             exchange='NSE',
             instrument_type='EQ',
             is_nifty500=True
         )
 
-        if scan_level == 'sector' and selected_sectors:
-            # Filter by selected sectors (via subsector relationship)
-            query = query.join(SubSector, Instrument.sub_sector_id == SubSector.id).filter(
-                SubSector.sector_id.in_(selected_sectors)
-            )
-        elif scan_level == 'subsector' and selected_subsectors:
-            # Filter by selected subsectors
-            query = query.filter(
-                Instrument.sub_sector_id.in_(selected_subsectors)
-            )
-        else:
-            # No valid selections, scan all NIFTY 500
-            current_app.logger.warning(f'Scanner task {self.task_id}: No valid selections in criteria')
+        if enable_scan_level_filter:
+            if scan_level == 'stage' and selected_stages:
+                # Filter by selected stages
+                # Important: Both sector AND subsector stages must match selected stages
+                # Join with SubSector and Sector to check both stages
+                from app.models import Sector
+                query = query.join(SubSector, Instrument.sub_sector_id == SubSector.id).join(
+                    Sector, SubSector.sector_id == Sector.id
+                ).filter(
+                    SubSector.current_stage.in_(selected_stages),
+                    Sector.current_stage.in_(selected_stages)
+                )
+            elif scan_level == 'sector' and selected_sectors:
+                # Filter by selected sectors (via subsector relationship)
+                query = query.join(SubSector, Instrument.sub_sector_id == SubSector.id).filter(
+                    SubSector.sector_id.in_(selected_sectors)
+                )
+            elif scan_level == 'subsector' and selected_subsectors:
+                # Filter by selected subsectors
+                query = query.filter(
+                    Instrument.sub_sector_id.in_(selected_subsectors)
+                )
+            else:
+                # No valid selections, log warning but continue
+                current_app.logger.warning(f'Scanner task {self.task_id}: No valid selections in scan level criteria')
+
+        # Apply RS filters (only if RS filter is enabled)
+        if enable_rs_filter:
+            # Filter by RS vs Subsector
+            if rs_sub_min is not None:
+                query = query.filter(Instrument.rs_subsector >= rs_sub_min)
+                current_app.logger.info(f'Scanner task {self.task_id}: Applying RS Sub Min filter: >= {rs_sub_min}')
+            if rs_sub_max is not None:
+                query = query.filter(Instrument.rs_subsector <= rs_sub_max)
+                current_app.logger.info(f'Scanner task {self.task_id}: Applying RS Sub Max filter: <= {rs_sub_max}')
+
+            # Filter by RS vs Sector
+            if rs_sec_min is not None:
+                query = query.filter(Instrument.rs_sector >= rs_sec_min)
+                current_app.logger.info(f'Scanner task {self.task_id}: Applying RS Sec Min filter: >= {rs_sec_min}')
+            if rs_sec_max is not None:
+                query = query.filter(Instrument.rs_sector <= rs_sec_max)
+                current_app.logger.info(f'Scanner task {self.task_id}: Applying RS Sec Max filter: <= {rs_sec_max}')
+
+            # Exclude stocks with NULL RS values when RS filter is enabled
+            if rs_sub_min is not None or rs_sub_max is not None:
+                query = query.filter(Instrument.rs_subsector.isnot(None))
+            if rs_sec_min is not None or rs_sec_max is not None:
+                query = query.filter(Instrument.rs_sector.isnot(None))
+
+        # Apply Volume Contraction filters (only if volume contraction filter is enabled)
+        if enable_volume_contraction_filter:
+            # Filter by Volume Dry-Up Status
+            if selected_volume_status:
+                query = query.filter(Instrument.volume_dryup_status.in_(selected_volume_status))
+                current_app.logger.info(
+                    f'Scanner task {self.task_id}: Applying Volume Status filter: {selected_volume_status}'
+                )
+
+            # Filter by Volume Dry-Up Classification
+            if selected_volume_classification:
+                query = query.filter(Instrument.volume_dryup_classification.in_(selected_volume_classification))
+                current_app.logger.info(
+                    f'Scanner task {self.task_id}: Applying Volume Classification filter: {selected_volume_classification}'
+                )
+
+            # Exclude stocks with NULL volume dry-up data when volume contraction filter is enabled
+            if selected_volume_status:
+                query = query.filter(Instrument.volume_dryup_status.isnot(None))
+            if selected_volume_classification:
+                query = query.filter(Instrument.volume_dryup_classification.isnot(None))
 
         stocks = query.all()
         current_app.logger.info(f'Scanner task {self.task_id}: Filtered to {len(stocks)} stocks')

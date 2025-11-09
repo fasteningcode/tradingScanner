@@ -127,10 +127,15 @@ class ScannerProfileForm(FlaskForm):
         Length(max=500, message='Description cannot exceed 500 characters')
     ])
     scan_level = RadioField('Scan Level',
-        choices=[('subsector', 'Subsector Level'), ('sector', 'Sector Level')],
-        default='subsector',
+        choices=[('stage', 'Stage Level'), ('sector', 'Sector Level'), ('subsector', 'Subsector Level')],
+        default='stage',
         validators=[DataRequired(message='Please select a scan level')]
     )
     criteria_json = HiddenField('Criteria JSON')
     is_default = BooleanField('Set as Default Profile')
+
+    # Enable/Disable toggles (stored in criteria_json, not as separate fields)
+    # enable_scan_level_filter - whether to use stage/sector/subsector filtering
+    # enable_rs_filter - whether to use RS filtering
+
     submit = SubmitField('Save Profile')

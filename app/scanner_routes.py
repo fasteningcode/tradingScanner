@@ -470,10 +470,16 @@ def _get_sectors_subsectors_data():
         ).count()
         subsector_stock_counts[subsector.id] = count
 
+    # Calculate sector counts per stage (how many sectors are in each stage)
+    stage_sector_counts = {}
+    for stage in [1, 2, 3, 4]:
+        stage_sector_counts[stage] = len(sectors_by_stage.get(stage, []))
+
     return {
         'sectors_by_stage': sectors_by_stage,
         'subsectors_by_sector': subsectors_by_sector,
         'sector_stock_counts': sector_stock_counts,
         'subsector_stock_counts': subsector_stock_counts,
+        'stage_sector_counts': stage_sector_counts,
         'all_sectors': sectors
     }

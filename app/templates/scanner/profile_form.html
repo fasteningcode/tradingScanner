@@ -1,300 +1,786 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <nav aria-label="breadcrumb">
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="{{ url_for('scanner.index') }}">Scanner</a></li>
-                <li class="breadcrumb-item"><a href="{{ url_for('scanner.index', tab='profiles') }}">Profiles</a></li>
-                <li class="breadcrumb-item active" aria-current="page">{{ 'Edit' if action == 'edit' else 'Create' }} Profile</li>
-            </ol>
-        </nav>
-    </div>
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('scanner.index') }}"><i class="bi bi-search me-1"></i>Scanner</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('scanner.index', tab='profiles') }}">Profiles</a></li>
+        <li class="breadcrumb-item active" aria-current="page">{{ 'Edit' if action == 'edit' else 'Create' }} Profile</li>
+    </ol>
+</nav>
+
+<!-- Page Header -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">
+        <i class="bi bi-{{ 'pencil' if action == 'edit' else 'plus-circle' }} text-primary me-2"></i>
+        {{ 'Edit' if action == 'edit' else 'Create' }} Scanner Profile
+    </h2>
+    <a href="{{ url_for('scanner.index', tab='profiles') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-2"></i>Back to Profiles
+    </a>
 </div>
 
-<div class="row justify-content-center">
-    <div class="col-12">
-        <div class="card shadow-sm">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-{{ 'pencil' if action == 'edit' else 'plus-circle' }} me-2"></i>
-                    {{ 'Edit' if action == 'edit' else 'Create' }} Scanner Profile
-                </h5>
+<form method="post" novalidate id="profileForm">
+    {{ form.hidden_tag() }}
+    {{ form.criteria_json() }}
+
+    <div class="row g-4">
+        <!-- Left Sidebar: Profile Information -->
+        <div class="col-lg-4">
+            <!-- Basic Information Card -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Profile Information</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        {{ form.name.label(class="form-label fw-bold") }}
+                        {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
+                        {% if form.name.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.name.errors %}{{ error }}{% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.description.label(class="form-label fw-bold") }}
+                        {{ form.description(class="form-control" + (" is-invalid" if form.description.errors else ""), rows=3) }}
+                        {% if form.description.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.description.errors %}{{ error }}{% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="text-muted">Optional description</small>
+                    </div>
+
+                    <div class="form-check form-switch">
+                        {{ form.is_default(class="form-check-input") }}
+                        {{ form.is_default.label(class="form-check-label fw-bold") }}
+                        <small class="d-block text-muted">Auto-selected when opening scanner</small>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <form method="post" novalidate id="profileForm">
-                    {{ form.hidden_tag() }}
-                    {{ form.criteria_json() }}
+        </div>
+
+        <!-- Right Main Content: Filter Criteria & Selection Area -->
+        <div class="col-lg-8">
+            <!-- Stage Level Filter Section -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="bi bi-funnel me-2"></i>Stage Level Filter</h6>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="enableScanLevelFilter" checked onclick="toggleScanLevelFilterSection()">
+                            <label class="form-check-label text-white" for="enableScanLevelFilter">
+                                Enable
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body" id="scanLevelFilterSection">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Scan Level</label>
+                            {% for subfield in form.scan_level %}
+                                <div class="form-check">
+                                    {{ subfield(class="form-check-input", onclick="toggleScanLevel()") }}
+                                    {{ subfield.label(class="form-check-label") }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        <div class="col-md-8">
+                            <div class="alert alert-light border">
+                                <strong class="small">Selection Summary</strong>
+                                <div id="selectionSummary" class="mt-2 small">
+                                    <span class="text-muted">No selections made</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stage/Sector/Subsector Selection Area -->
+            <div class="card shadow-sm" id="stageLevelRightColumn">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="bi bi-check2-square me-2"></i>
+                        <span id="selectionTitle">Select Subsectors</span>
+                    </h6>
+                </div>
+                <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                    <!-- Stage Level Selection UI -->
+                    <div id="stageLevelUI">
+                        <div class="alert alert-info py-2">
+                            <small>
+                                <i class="bi bi-info-circle me-1"></i>
+                                Select Weinstein stages to scan all stocks in sectors and subsectors at those stages.
+                            </small>
+                        </div>
+
+                        <div class="row">
+                            {% for stage_num in [1, 2, 3, 4] %}
+                                {% if stage_num == 1 %}
+                                    {% set stage_name = "Accumulation" %}
+                                    {% set stage_class = "primary" %}
+                                    {% set stage_icon = "circle" %}
+                                    {% set stage_desc = "Building base, smart money accumulating" %}
+                                {% elif stage_num == 2 %}
+                                    {% set stage_name = "Markup" %}
+                                    {% set stage_class = "success" %}
+                                    {% set stage_icon = "arrow-up-circle" %}
+                                    {% set stage_desc = "Uptrend, advancing phase" %}
+                                {% elif stage_num == 3 %}
+                                    {% set stage_name = "Distribution" %}
+                                    {% set stage_class = "warning" %}
+                                    {% set stage_icon = "dash-circle" %}
+                                    {% set stage_desc = "Topping, smart money distributing" %}
+                                {% elif stage_num == 4 %}
+                                    {% set stage_name = "Decline" %}
+                                    {% set stage_class = "danger" %}
+                                    {% set stage_icon = "arrow-down-circle" %}
+                                    {% set stage_desc = "Downtrend, declining phase" %}
+                                {% endif %}
+
+                                <div class="col-md-6 mb-3">
+                                    <div class="card h-100 shadow-sm">
+                                        <div class="card-body p-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input stage-checkbox" type="checkbox"
+                                                       value="{{ stage_num }}"
+                                                       id="stage_{{ stage_num }}"
+                                                       data-stage-name="{{ stage_name }}"
+                                                       onclick="updateSelections()">
+                                                <label class="form-check-label w-100" for="stage_{{ stage_num }}">
+                                                    <div class="d-flex justify-content-between align-items-center">
+                                                        <span>
+                                                            <span class="badge bg-{{ stage_class }} me-2">
+                                                                <i class="bi bi-{{ stage_icon }}"></i> Stage {{ stage_num }}
+                                                            </span>
+                                                            <strong>{{ stage_name }}</strong>
+                                                        </span>
+                                                        <span class="badge bg-secondary">
+                                                            {{ stage_sector_counts.get(stage_num, 0) }} sectors
+                                                        </span>
+                                                    </div>
+                                                    <small class="text-muted d-block mt-1">{{ stage_desc }}</small>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="mt-3">
+                            <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="selectAllStages()">
+                                <i class="bi bi-check-all me-1"></i>Select All
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearAllStages()">
+                                <i class="bi bi-x-circle me-1"></i>Clear All
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Sector Level Selection UI -->
+                    <div id="sectorLevelUI" style="display: none;">
+                        <div class="mb-3">
+                            <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="selectAllSectors()">
+                                <i class="bi bi-check-all me-1"></i>Select All
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearAllSectors()">
+                                <i class="bi bi-x-circle me-1"></i>Clear All
+                            </button>
+                        </div>
+
+                        <div class="accordion" id="sectorAccordion">
+                            {% for stage_num in [2, 1, 3, 4] %}
+                                {% set sectors_in_stage = sectors_by_stage.get(stage_num, []) %}
+                                {% if sectors_in_stage %}
+                                    {% if stage_num == 1 %}
+                                        {% set stage_name = "Accumulation" %}
+                                        {% set stage_class = "primary" %}
+                                        {% set stage_icon = "circle" %}
+                                    {% elif stage_num == 2 %}
+                                        {% set stage_name = "Markup" %}
+                                        {% set stage_class = "success" %}
+                                        {% set stage_icon = "arrow-up-circle" %}
+                                    {% elif stage_num == 3 %}
+                                        {% set stage_name = "Distribution" %}
+                                        {% set stage_class = "warning" %}
+                                        {% set stage_icon = "dash-circle" %}
+                                    {% elif stage_num == 4 %}
+                                        {% set stage_name = "Decline" %}
+                                        {% set stage_class = "danger" %}
+                                        {% set stage_icon = "arrow-down-circle" %}
+                                    {% endif %}
+
+                                    <div class="accordion-item">
+                                        <h2 class="accordion-header">
+                                            <button class="accordion-button {{ 'collapsed' if stage_num != 2 else '' }}" type="button" data-bs-toggle="collapse" data-bs-target="#sectorStage{{ stage_num }}">
+                                                <span class="badge bg-{{ stage_class }} me-2">
+                                                    <i class="bi bi-{{ stage_icon }}"></i> Stage {{ stage_num }}: {{ stage_name }}
+                                                </span>
+                                                <span class="text-muted small">({{ sectors_in_stage|length }} sectors)</span>
+                                            </button>
+                                        </h2>
+                                        <div id="sectorStage{{ stage_num }}" class="accordion-collapse collapse {{ 'show' if stage_num == 2 else '' }}" data-bs-parent="#sectorAccordion">
+                                            <div class="accordion-body">
+                                                <div class="row">
+                                                    {% for sector in sectors_in_stage %}
+                                                        <div class="col-md-6 mb-2">
+                                                            <div class="form-check">
+                                                                <input class="form-check-input sector-checkbox" type="checkbox"
+                                                                       value="{{ sector.id }}"
+                                                                       id="sector_{{ sector.id }}"
+                                                                       data-sector-name="{{ sector.name }}"
+                                                                       onclick="updateSelections()">
+                                                                <label class="form-check-label" for="sector_{{ sector.id }}">
+                                                                    <i class="{{ sector.icon }} me-1" style="color: {{ sector.color }};"></i>
+                                                                    {{ sector.name }}
+                                                                    <small class="text-muted">({{ sector_stock_counts.get(sector.id, 0) }} stocks)</small>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Subsector Level Selection UI -->
+                    <div id="subsectorLevelUI">
+                        <div class="mb-3">
+                            <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="selectAllSubsectors()">
+                                <i class="bi bi-check-all me-1"></i>Select All
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearAllSubsectors()">
+                                <i class="bi bi-x-circle me-1"></i>Clear All
+                            </button>
+                        </div>
+
+                        <div class="accordion" id="subsectorAccordion">
+                            {% for sector in all_sectors %}
+                                {% set sector_subsectors = subsectors_by_sector.get(sector.id, {}) %}
+                                {% set total_subsectors = sector_subsectors.get(1, [])|length + sector_subsectors.get(2, [])|length + sector_subsectors.get(3, [])|length + sector_subsectors.get(4, [])|length %}
+                                {% if total_subsectors > 0 %}
+                                    <div class="accordion-item">
+                                        <h2 class="accordion-header">
+                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#subsectorSector{{ sector.id }}">
+                                                <i class="{{ sector.icon }} me-2" style="color: {{ sector.color }};"></i>
+                                                {{ sector.name }}
+                                                <span class="text-muted small ms-2">({{ total_subsectors }} subsectors)</span>
+                                            </button>
+                                        </h2>
+                                        <div id="subsectorSector{{ sector.id }}" class="accordion-collapse collapse" data-bs-parent="#subsectorAccordion">
+                                            <div class="accordion-body">
+                                                {% for stage_num in [2, 1, 3, 4] %}
+                                                    {% set subsectors_in_stage = sector_subsectors.get(stage_num, []) %}
+                                                    {% if subsectors_in_stage %}
+                                                        {% if stage_num == 1 %}
+                                                            {% set stage_name = "Accumulation" %}
+                                                            {% set stage_class = "primary" %}
+                                                            {% set stage_icon = "circle" %}
+                                                        {% elif stage_num == 2 %}
+                                                            {% set stage_name = "Markup" %}
+                                                            {% set stage_class = "success" %}
+                                                            {% set stage_icon = "arrow-up-circle" %}
+                                                        {% elif stage_num == 3 %}
+                                                            {% set stage_name = "Distribution" %}
+                                                            {% set stage_class = "warning" %}
+                                                            {% set stage_icon = "dash-circle" %}
+                                                        {% elif stage_num == 4 %}
+                                                            {% set stage_name = "Decline" %}
+                                                            {% set stage_class = "danger" %}
+                                                            {% set stage_icon = "arrow-down-circle" %}
+                                                        {% endif %}
+
+                                                        <div class="mb-3">
+                                                            <h6 class="mb-2">
+                                                                <span class="badge bg-{{ stage_class }}">
+                                                                    <i class="bi bi-{{ stage_icon }}"></i> Stage {{ stage_num }}: {{ stage_name }}
+                                                                </span>
+                                                            </h6>
+                                                            <div class="row">
+                                                                {% for subsector in subsectors_in_stage %}
+                                                                    <div class="col-md-6 mb-2">
+                                                                        <div class="form-check">
+                                                                            <input class="form-check-input subsector-checkbox" type="checkbox"
+                                                                                   value="{{ subsector.id }}"
+                                                                                   id="subsector_{{ subsector.id }}"
+                                                                                   data-subsector-name="{{ subsector.name }}"
+                                                                                   data-sector-name="{{ sector.name }}"
+                                                                                   onclick="updateSelections()">
+                                                                            <label class="form-check-label" for="subsector_{{ subsector.id }}">
+                                                                                {{ subsector.name }}
+                                                                                <small class="text-muted">({{ subsector_stock_counts.get(subsector.id, 0) }} stocks)</small>
+                                                                            </label>
+                                                                        </div>
+                                                                    </div>
+                                                                {% endfor %}
+                                                            </div>
+                                                        </div>
+                                                    {% endif %}
+                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RS Filter Section -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-success text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="bi bi-graph-up me-2"></i>Relative Strength Filter</h6>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="enableRsFilter" onclick="toggleRsFilterSection()">
+                            <label class="form-check-label text-white" for="enableRsFilter">
+                                Enable
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body" id="rsFilterSection" style="display: none;">
+                    <div class="alert alert-info py-2 small mb-3">
+                        <i class="bi bi-info-circle me-1"></i>
+                        <strong>RS &gt; 1.0:</strong> Outperforming | <strong>RS &lt; 1.0:</strong> Underperforming
+                    </div>
 
                     <div class="row">
-                        <!-- Left Column: Basic Info -->
-                        <div class="col-md-4">
-                            <h6 class="mb-3"><i class="bi bi-info-circle me-2"></i>Basic Information</h6>
-
-                            <div class="mb-3">
-                                {{ form.name.label(class="form-label") }}
-                                {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
-                                {% if form.name.errors %}
-                                    <div class="invalid-feedback">
-                                        {% for error in form.name.errors %}
-                                            {{ error }}
-                                        {% endfor %}
+                        <!-- RS vs Subsector -->
+                        <div class="col-md-6 mb-3">
+                            <div class="p-3 border rounded bg-light">
+                                <label class="form-label fw-bold small mb-2">
+                                    <i class="bi bi-diagram-3 me-1"></i>RS vs Subsector
+                                </label>
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <label class="form-label small">Min</label>
+                                        <input type="number" class="form-control" id="rsSubMin" step="0.1" placeholder="e.g., 0.8" onchange="updateSelections()">
                                     </div>
-                                {% endif %}
-                                <small class="form-text text-muted">
-                                    Give your scanner profile a unique name
-                                </small>
-                            </div>
-
-                            <div class="mb-3">
-                                {{ form.description.label(class="form-label") }}
-                                {{ form.description(class="form-control" + (" is-invalid" if form.description.errors else ""), rows=3) }}
-                                {% if form.description.errors %}
-                                    <div class="invalid-feedback">
-                                        {% for error in form.description.errors %}
-                                            {{ error }}
-                                        {% endfor %}
+                                    <div class="col-6">
+                                        <label class="form-label small">Max</label>
+                                        <input type="number" class="form-control" id="rsSubMax" step="0.1" placeholder="e.g., 2.0" onchange="updateSelections()">
                                     </div>
-                                {% endif %}
-                                <small class="form-text text-muted">
-                                    Optional: Describe what this profile scans for
-                                </small>
-                            </div>
-
-                            <div class="mb-3">
-                                <div class="form-check">
-                                    {{ form.is_default(class="form-check-input") }}
-                                    {{ form.is_default.label(class="form-check-label") }}
-                                </div>
-                                <small class="form-text text-muted">
-                                    Auto-selected when opening scanner
-                                </small>
-                            </div>
-
-                            <hr>
-
-                            <h6 class="mb-3"><i class="bi bi-funnel me-2"></i>Scan Level</h6>
-                            <div class="mb-3">
-                                {% for subfield in form.scan_level %}
-                                    <div class="form-check">
-                                        {{ subfield(class="form-check-input", onclick="toggleScanLevel()") }}
-                                        {{ subfield.label(class="form-check-label") }}
-                                    </div>
-                                {% endfor %}
-                                <small class="form-text text-muted">
-                                    Choose whether to scan by sector or subsector
-                                </small>
-                            </div>
-
-                            <div class="alert alert-sm alert-secondary">
-                                <small><strong>Selection Summary:</strong></small>
-                                <div id="selectionSummary" class="mt-2">
-                                    <small class="text-muted">No selections made yet</small>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Right Column: Sector/Subsector Selection -->
-                        <div class="col-md-8">
-                            <h6 class="mb-3">
-                                <i class="bi bi-check2-square me-2"></i>
-                                <span id="selectionTitle">Select Subsectors</span>
-                            </h6>
-
-                            <!-- Sector Level Selection UI -->
-                            <div id="sectorLevelUI" style="display: none;">
-                                <div class="mb-3">
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectAllSectors()">
-                                        <i class="bi bi-check-all me-1"></i>Select All Sectors
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearAllSectors()">
-                                        <i class="bi bi-x-circle me-1"></i>Clear All
-                                    </button>
-                                </div>
-
-                                <div class="accordion" id="sectorAccordion">
-                                    {% for stage_num in [2, 1, 3, 4] %}
-                                        {% set sectors_in_stage = sectors_by_stage.get(stage_num, []) %}
-                                        {% if sectors_in_stage %}
-                                            {% if stage_num == 1 %}
-                                                {% set stage_name = "Accumulation" %}
-                                                {% set stage_class = "primary" %}
-                                                {% set stage_icon = "circle" %}
-                                            {% elif stage_num == 2 %}
-                                                {% set stage_name = "Markup" %}
-                                                {% set stage_class = "success" %}
-                                                {% set stage_icon = "arrow-up-circle" %}
-                                            {% elif stage_num == 3 %}
-                                                {% set stage_name = "Distribution" %}
-                                                {% set stage_class = "warning" %}
-                                                {% set stage_icon = "dash-circle" %}
-                                            {% elif stage_num == 4 %}
-                                                {% set stage_name = "Decline" %}
-                                                {% set stage_class = "danger" %}
-                                                {% set stage_icon = "arrow-down-circle" %}
-                                            {% endif %}
-
-                                            <div class="accordion-item">
-                                                <h2 class="accordion-header">
-                                                    <button class="accordion-button {{ 'collapsed' if stage_num != 2 else '' }}" type="button" data-bs-toggle="collapse" data-bs-target="#sectorStage{{ stage_num }}">
-                                                        <span class="badge bg-{{ stage_class }} me-2">
-                                                            <i class="bi bi-{{ stage_icon }}"></i> Stage {{ stage_num }}: {{ stage_name }}
-                                                        </span>
-                                                        <span class="text-muted small">({{ sectors_in_stage|length }} sectors)</span>
-                                                    </button>
-                                                </h2>
-                                                <div id="sectorStage{{ stage_num }}" class="accordion-collapse collapse {{ 'show' if stage_num == 2 else '' }}" data-bs-parent="#sectorAccordion">
-                                                    <div class="accordion-body">
-                                                        <div class="row">
-                                                            {% for sector in sectors_in_stage %}
-                                                                <div class="col-md-6 mb-2">
-                                                                    <div class="form-check">
-                                                                        <input class="form-check-input sector-checkbox" type="checkbox"
-                                                                               value="{{ sector.id }}"
-                                                                               id="sector_{{ sector.id }}"
-                                                                               data-sector-name="{{ sector.name }}"
-                                                                               onclick="updateSelections()">
-                                                                        <label class="form-check-label" for="sector_{{ sector.id }}">
-                                                                            <i class="{{ sector.icon }} me-1" style="color: {{ sector.color }};"></i>
-                                                                            {{ sector.name }}
-                                                                            <small class="text-muted">({{ sector_stock_counts.get(sector.id, 0) }} stocks)</small>
-                                                                        </label>
-                                                                    </div>
-                                                                </div>
-                                                            {% endfor %}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        {% endif %}
-                                    {% endfor %}
-                                </div>
-                            </div>
-
-                            <!-- Subsector Level Selection UI -->
-                            <div id="subsectorLevelUI">
-                                <div class="mb-3">
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectAllSubsectors()">
-                                        <i class="bi bi-check-all me-1"></i>Select All Subsectors
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearAllSubsectors()">
-                                        <i class="bi bi-x-circle me-1"></i>Clear All
-                                    </button>
-                                </div>
-
-                                <div class="accordion" id="subsectorAccordion">
-                                    {% for sector in all_sectors %}
-                                        {% set sector_subsectors = subsectors_by_sector.get(sector.id, {}) %}
-                                        {% set total_subsectors = sector_subsectors.get(1, [])|length + sector_subsectors.get(2, [])|length + sector_subsectors.get(3, [])|length + sector_subsectors.get(4, [])|length %}
-                                        {% if total_subsectors > 0 %}
-                                            <div class="accordion-item">
-                                                <h2 class="accordion-header">
-                                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#subsectorSector{{ sector.id }}">
-                                                        <i class="{{ sector.icon }} me-2" style="color: {{ sector.color }};"></i>
-                                                        {{ sector.name }}
-                                                        <span class="text-muted small ms-2">({{ total_subsectors }} subsectors)</span>
-                                                    </button>
-                                                </h2>
-                                                <div id="subsectorSector{{ sector.id }}" class="accordion-collapse collapse" data-bs-parent="#subsectorAccordion">
-                                                    <div class="accordion-body">
-                                                        {% for stage_num in [2, 1, 3, 4] %}
-                                                            {% set subsectors_in_stage = sector_subsectors.get(stage_num, []) %}
-                                                            {% if subsectors_in_stage %}
-                                                                {% if stage_num == 1 %}
-                                                                    {% set stage_name = "Accumulation" %}
-                                                                    {% set stage_class = "primary" %}
-                                                                    {% set stage_icon = "circle" %}
-                                                                {% elif stage_num == 2 %}
-                                                                    {% set stage_name = "Markup" %}
-                                                                    {% set stage_class = "success" %}
-                                                                    {% set stage_icon = "arrow-up-circle" %}
-                                                                {% elif stage_num == 3 %}
-                                                                    {% set stage_name = "Distribution" %}
-                                                                    {% set stage_class = "warning" %}
-                                                                    {% set stage_icon = "dash-circle" %}
-                                                                {% elif stage_num == 4 %}
-                                                                    {% set stage_name = "Decline" %}
-                                                                    {% set stage_class = "danger" %}
-                                                                    {% set stage_icon = "arrow-down-circle" %}
-                                                                {% endif %}
-
-                                                                <div class="mb-3">
-                                                                    <h6 class="mb-2">
-                                                                        <span class="badge bg-{{ stage_class }}">
-                                                                            <i class="bi bi-{{ stage_icon }}"></i> Stage {{ stage_num }}: {{ stage_name }}
-                                                                        </span>
-                                                                    </h6>
-                                                                    <div class="row">
-                                                                        {% for subsector in subsectors_in_stage %}
-                                                                            <div class="col-md-6 mb-2">
-                                                                                <div class="form-check">
-                                                                                    <input class="form-check-input subsector-checkbox" type="checkbox"
-                                                                                           value="{{ subsector.id }}"
-                                                                                           id="subsector_{{ subsector.id }}"
-                                                                                           data-subsector-name="{{ subsector.name }}"
-                                                                                           data-sector-name="{{ sector.name }}"
-                                                                                           onclick="updateSelections()">
-                                                                                    <label class="form-check-label" for="subsector_{{ subsector.id }}">
-                                                                                        {{ subsector.name }}
-                                                                                        <small class="text-muted">({{ subsector_stock_counts.get(subsector.id, 0) }} stocks)</small>
-                                                                                    </label>
-                                                                                </div>
-                                                                            </div>
-                                                                        {% endfor %}
-                                                                    </div>
-                                                                </div>
-                                                            {% endif %}
-                                                        {% endfor %}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        {% endif %}
-                                    {% endfor %}
+                        <!-- RS vs Sector -->
+                        <div class="col-md-6 mb-3">
+                            <div class="p-3 border rounded bg-light">
+                                <label class="form-label fw-bold small mb-2">
+                                    <i class="bi bi-layers me-1"></i>RS vs Sector
+                                </label>
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <label class="form-label small">Min</label>
+                                        <input type="number" class="form-control" id="rsSecMin" step="0.1" placeholder="e.g., 0.8" onchange="updateSelections()">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small">Max</label>
+                                        <input type="number" class="form-control" id="rsSecMax" step="0.1" placeholder="e.g., 2.0" onchange="updateSelections()">
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <hr class="my-4">
+                    <small class="text-muted">
+                        <i class="bi bi-lightbulb me-1"></i>Leave empty to skip that filter
+                    </small>
+                </div>
+            </div>
 
-                    <div class="d-flex justify-content-between">
-                        <a href="{{ url_for('scanner.index', tab='profiles') }}" class="btn btn-secondary">
-                            <i class="bi bi-x-circle me-2"></i>Cancel
+            <!-- Moving Averages Filter Section -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-info text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="bi bi-graph-up-arrow me-2"></i>Moving Averages Filter</h6>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="enableMaFilter" onclick="toggleMaFilterSection()">
+                            <label class="form-check-label text-white" for="enableMaFilter">
+                                Enable
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body" id="maFilterSection" style="display: none;">
+                    <div class="alert alert-info py-2 small mb-3">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Select moving averages - stocks where current price is <strong>above</strong> the selected MA will match
+                    </div>
+
+                    <div class="row">
+                        <!-- Simple Moving Averages (SMA) -->
+                        <div class="col-md-6 mb-3">
+                            <div class="p-3 border rounded bg-light">
+                                <label class="form-label fw-bold small mb-3">
+                                    <i class="bi bi-graph-up me-1"></i>Simple Moving Averages (SMA)
+                                </label>
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input ma-checkbox" type="checkbox" id="sma9" value="9" data-ma-type="sma" onchange="updateSelections()">
+                                            <label class="form-check-label" for="sma9">
+                                                9 SMA
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input ma-checkbox" type="checkbox" id="sma20" value="20" data-ma-type="sma" onchange="updateSelections()">
+                                            <label class="form-check-label" for="sma20">
+                                                20 SMA
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input ma-checkbox" type="checkbox" id="sma50" value="50" data-ma-type="sma" onchange="updateSelections()">
+                                            <label class="form-check-label" for="sma50">
+                                                50 SMA
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input ma-checkbox" type="checkbox" id="sma150" value="150" data-ma-type="sma" onchange="updateSelections()">
+                                            <label class="form-check-label" for="sma150">
+                                                150 SMA
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Exponential Moving Averages (EMA) -->
+                        <div class="col-md-6 mb-3">
+                            <div class="p-3 border rounded bg-light">
+                                <label class="form-label fw-bold small mb-3">
+                                    <i class="bi bi-activity me-1"></i>Exponential Moving Averages (EMA)
+                                </label>
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input ma-checkbox" type="checkbox" id="ema9" value="9" data-ma-type="ema" onchange="updateSelections()">
+                                            <label class="form-check-label" for="ema9">
+                                                9 EMA
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input ma-checkbox" type="checkbox" id="ema20" value="20" data-ma-type="ema" onchange="updateSelections()">
+                                            <label class="form-check-label" for="ema20">
+                                                20 EMA
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input ma-checkbox" type="checkbox" id="ema50" value="50" data-ma-type="ema" onchange="updateSelections()">
+                                            <label class="form-check-label" for="ema50">
+                                                50 EMA
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input ma-checkbox" type="checkbox" id="ema150" value="150" data-ma-type="ema" onchange="updateSelections()">
+                                            <label class="form-check-label" for="ema150">
+                                                150 EMA
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <small class="text-muted">
+                        <i class="bi bi-lightbulb me-1"></i>Price above MA indicates bullish trend
+                    </small>
+                </div>
+            </div>
+
+            <!-- Volume Contraction Filter Section -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-warning text-dark">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="bi bi-soundwave me-2"></i>Volume Contraction Filter</h6>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="enableVolumeContractionFilter" onclick="toggleVolumeContractionFilterSection()">
+                            <label class="form-check-label" for="enableVolumeContractionFilter">Enable</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body" id="volumeContractionFilterSection" style="display: none;">
+                    <div class="row">
+                        <!-- Volume Dry-Up Status -->
+                        <div class="col-md-6 mb-3">
+                            <div class="p-3 border rounded bg-light">
+                                <label class="form-label fw-bold small mb-3">
+                                    <i class="bi bi-check-circle me-1"></i>Volume Dry-Up Status
+                                </label>
+                                <div class="row g-2">
+                                    <div class="col-12">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input volume-status-checkbox" type="checkbox" id="status_qualified" value="qualified" onchange="updateSelections()">
+                                            <label class="form-check-label" for="status_qualified">
+                                                Qualified
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input volume-status-checkbox" type="checkbox" id="status_not_qualified" value="not_qualified" onchange="updateSelections()">
+                                            <label class="form-check-label" for="status_not_qualified">
+                                                Not Qualified
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Volume Dry-Up Classification -->
+                        <div class="col-md-6 mb-3">
+                            <div class="p-3 border rounded bg-light">
+                                <label class="form-label fw-bold small mb-3">
+                                    <i class="bi bi-star me-1"></i>Volume Dry-Up Classification
+                                </label>
+                                <div class="row g-2">
+                                    <div class="col-12">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input volume-classification-checkbox" type="checkbox" id="classification_extreme" value="extreme" onchange="updateSelections()">
+                                            <label class="form-check-label" for="classification_extreme">
+                                                Extreme
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input volume-classification-checkbox" type="checkbox" id="classification_strong" value="strong" onchange="updateSelections()">
+                                            <label class="form-check-label" for="classification_strong">
+                                                Strong
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input volume-classification-checkbox" type="checkbox" id="classification_good" value="good" onchange="updateSelections()">
+                                            <label class="form-check-label" for="classification_good">
+                                                Good
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input volume-classification-checkbox" type="checkbox" id="classification_moderate" value="moderate" onchange="updateSelections()">
+                                            <label class="form-check-label" for="classification_moderate">
+                                                Moderate
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <small class="text-muted">
+                        <i class="bi bi-lightbulb me-1"></i>Volume contraction indicates potential accumulation phase
+                    </small>
+                </div>
+            </div>
+
+            <!-- Price Action Strategies Filter Section -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-danger text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="bi bi-bar-chart-line me-2"></i>Price Action Strategies</h6>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="enablePriceActionFilter" onclick="togglePriceActionFilterSection()">
+                            <label class="form-check-label text-white" for="enablePriceActionFilter">Enable</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body" id="priceActionFilterSection" style="display: none;">
+                    <div class="alert alert-info py-2 small mb-3">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Select price action patterns to identify potential trading opportunities
+                    </div>
+
+                    <div class="row">
+                        <!-- Breakout Pattern -->
+                        <div class="col-md-6 mb-3">
+                            <div class="p-3 border rounded bg-light">
+                                <label class="form-label fw-bold small mb-3">
+                                    <i class="bi bi-arrow-up-right-circle me-1"></i>Breakout Stage
+                                </label>
+                                <div class="row g-2">
+                                    <div class="col-12">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input price-action-checkbox" type="checkbox" id="breakout_stage" value="breakout" onchange="updateSelections()">
+                                            <label class="form-check-label" for="breakout_stage">
+                                                Breakout Pattern
+                                            </label>
+                                        </div>
+                                        <small class="text-muted d-block ms-4">Price breaking above resistance</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pullback Pattern -->
+                        <div class="col-md-6 mb-3">
+                            <div class="p-3 border rounded bg-light">
+                                <label class="form-label fw-bold small mb-3">
+                                    <i class="bi bi-arrow-down-up me-1"></i>Pullback Stage
+                                </label>
+                                <div class="row g-2">
+                                    <div class="col-12">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input price-action-checkbox" type="checkbox" id="pullback_stage" value="pullback" onchange="updateSelections()">
+                                            <label class="form-check-label" for="pullback_stage">
+                                                Pullback Pattern
+                                            </label>
+                                        </div>
+                                        <small class="text-muted d-block ms-4">Healthy retracement after breakout</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <small class="text-muted">
+                        <i class="bi bi-lightbulb me-1"></i>Price action patterns help identify entry and re-entry opportunities
+                    </small>
+                </div>
+            </div>
+
+            <!-- Form Footer -->
+            <div class="card shadow-sm mt-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <a href="{{ url_for('scanner.index', tab='profiles') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left me-2"></i>Cancel
                         </a>
-                        <button type="submit" class="btn btn-primary">
+                        <button type="submit" class="btn btn-primary btn-lg">
                             <i class="bi bi-save me-2"></i>{{ form.submit.label.text }}
                         </button>
                     </div>
-                </form>
+                </div>
             </div>
         </div>
     </div>
-</div>
+</form>
+
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    // Toggle between sector and subsector level UI
+    // Toggle Scan Level Filter Section
+    function toggleScanLevelFilterSection() {
+        const enabled = document.getElementById('enableScanLevelFilter').checked;
+        const section = document.getElementById('scanLevelFilterSection');
+        const rightColumn = document.getElementById('stageLevelRightColumn');
+
+        section.style.display = enabled ? 'block' : 'none';
+        rightColumn.style.display = enabled ? 'block' : 'none';
+
+        updateSelections();
+    }
+
+    // Toggle RS Filter Section
+    function toggleRsFilterSection() {
+        const enabled = document.getElementById('enableRsFilter').checked;
+        const section = document.getElementById('rsFilterSection');
+        section.style.display = enabled ? 'block' : 'none';
+        updateSelections();
+    }
+
+    // Toggle MA Filter Section
+    function toggleMaFilterSection() {
+        const enabled = document.getElementById('enableMaFilter').checked;
+        const section = document.getElementById('maFilterSection');
+        section.style.display = enabled ? 'block' : 'none';
+        updateSelections();
+    }
+
+    // Toggle Volume Contraction Filter Section
+    function toggleVolumeContractionFilterSection() {
+        const enabled = document.getElementById('enableVolumeContractionFilter').checked;
+        const section = document.getElementById('volumeContractionFilterSection');
+        section.style.display = enabled ? 'block' : 'none';
+        updateSelections();
+    }
+
+    // Toggle Price Action Filter Section
+    function togglePriceActionFilterSection() {
+        const enabled = document.getElementById('enablePriceActionFilter').checked;
+        const section = document.getElementById('priceActionFilterSection');
+        section.style.display = enabled ? 'block' : 'none';
+        updateSelections();
+    }
+
+    // Toggle between stage, sector and subsector level UI
     function toggleScanLevel() {
         const scanLevel = document.querySelector('input[name="scan_level"]:checked').value;
+        const stageUI = document.getElementById('stageLevelUI');
         const sectorUI = document.getElementById('sectorLevelUI');
         const subsectorUI = document.getElementById('subsectorLevelUI');
         const title = document.getElementById('selectionTitle');
 
-        if (scanLevel === 'sector') {
+        if (scanLevel === 'stage') {
+            stageUI.style.display = 'block';
+            sectorUI.style.display = 'none';
+            subsectorUI.style.display = 'none';
+            title.textContent = 'Select Stages';
+            // Clear sector and subsector selections
+            document.querySelectorAll('.sector-checkbox').forEach(cb => cb.checked = false);
+            document.querySelectorAll('.subsector-checkbox').forEach(cb => cb.checked = false);
+        } else if (scanLevel === 'sector') {
+            stageUI.style.display = 'none';
             sectorUI.style.display = 'block';
             subsectorUI.style.display = 'none';
             title.textContent = 'Select Sectors';
-            // Clear subsector selections
+            // Clear stage and subsector selections
+            document.querySelectorAll('.stage-checkbox').forEach(cb => cb.checked = false);
             document.querySelectorAll('.subsector-checkbox').forEach(cb => cb.checked = false);
         } else {
+            stageUI.style.display = 'none';
             sectorUI.style.display = 'none';
             subsectorUI.style.display = 'block';
             title.textContent = 'Select Subsectors';
-            // Clear sector selections
+            // Clear stage and sector selections
+            document.querySelectorAll('.stage-checkbox').forEach(cb => cb.checked = false);
             document.querySelectorAll('.sector-checkbox').forEach(cb => cb.checked = false);
         }
+        updateSelections();
+    }
+
+    // Select all stages
+    function selectAllStages() {
+        document.querySelectorAll('.stage-checkbox').forEach(cb => cb.checked = true);
+        updateSelections();
+    }
+
+    // Clear all stages
+    function clearAllStages() {
+        document.querySelectorAll('.stage-checkbox').forEach(cb => cb.checked = false);
         updateSelections();
     }
 
@@ -328,10 +814,23 @@
         const summaryDiv = document.getElementById('selectionSummary');
         const criteriaField = document.getElementById('criteria_json');
 
+        console.log('updateSelections() called, scanLevel:', scanLevel);
+
         let selectedIds = [];
         let summaryHTML = '';
 
-        if (scanLevel === 'sector') {
+        if (scanLevel === 'stage') {
+            const checkedStages = document.querySelectorAll('.stage-checkbox:checked');
+            selectedIds = Array.from(checkedStages).map(cb => parseInt(cb.value));
+            console.log('Stage checkboxes checked:', checkedStages.length, 'IDs:', selectedIds);
+
+            if (selectedIds.length === 0) {
+                summaryHTML = '<small class="text-muted">No stages selected</small>';
+            } else {
+                const stageNames = Array.from(checkedStages).map(cb => cb.dataset.stageName);
+                summaryHTML = `<small><strong>${selectedIds.length} Stages:</strong><br>${stageNames.join(', ')}</small>`;
+            }
+        } else if (scanLevel === 'sector') {
             const checkedSectors = document.querySelectorAll('.sector-checkbox:checked');
             selectedIds = Array.from(checkedSectors).map(cb => parseInt(cb.value));
 
@@ -364,56 +863,270 @@
             }
         }
 
-        summaryDiv.innerHTML = summaryHTML;
+        // Update summary display (with error handling)
+        if (summaryDiv) {
+            summaryDiv.innerHTML = summaryHTML;
+        } else {
+            console.error('selectionSummary div not found!');
+        }
 
-        // Update criteria JSON
+        // Get enable/disable flags
+        const enableScanLevelFilter = document.getElementById('enableScanLevelFilter').checked;
+        const enableRsFilter = document.getElementById('enableRsFilter').checked;
+        const enableMaFilter = document.getElementById('enableMaFilter').checked;
+        const enableVolumeContractionFilter = document.getElementById('enableVolumeContractionFilter').checked;
+        const enablePriceActionFilter = document.getElementById('enablePriceActionFilter').checked;
+
+        // Get RS values
+        const rsSubMin = document.getElementById('rsSubMin').value;
+        const rsSubMax = document.getElementById('rsSubMax').value;
+        const rsSecMin = document.getElementById('rsSecMin').value;
+        const rsSecMax = document.getElementById('rsSecMax').value;
+
+        // Get selected Moving Averages
+        const selectedSma = [];
+        const selectedEma = [];
+        document.querySelectorAll('.ma-checkbox:checked').forEach(cb => {
+            const maType = cb.dataset.maType;
+            const maPeriod = parseInt(cb.value);
+            if (maType === 'sma') {
+                selectedSma.push(maPeriod);
+            } else if (maType === 'ema') {
+                selectedEma.push(maPeriod);
+            }
+        });
+
+        // Get selected Volume Contraction Status
+        const selectedVolumeStatus = [];
+        document.querySelectorAll('.volume-status-checkbox:checked').forEach(cb => {
+            selectedVolumeStatus.push(cb.value);
+        });
+
+        // Get selected Volume Contraction Classification
+        const selectedVolumeClassification = [];
+        document.querySelectorAll('.volume-classification-checkbox:checked').forEach(cb => {
+            selectedVolumeClassification.push(cb.value);
+        });
+
+        // Get selected Price Action Strategies
+        const selectedPriceActionStrategies = [];
+        document.querySelectorAll('.price-action-checkbox:checked').forEach(cb => {
+            selectedPriceActionStrategies.push(cb.value);
+        });
+
+        // Update criteria JSON (ALWAYS do this, even if summary fails)
         const criteria = {
             scan_level: scanLevel,
+            selected_stages: scanLevel === 'stage' ? selectedIds : [],
             selected_sectors: scanLevel === 'sector' ? selectedIds : [],
             selected_subsectors: scanLevel === 'subsector' ? selectedIds : [],
-            version: '1.0'
+            enable_scan_level_filter: enableScanLevelFilter,
+            enable_rs_filter: enableRsFilter,
+            rs_sub_min: rsSubMin ? parseFloat(rsSubMin) : null,
+            rs_sub_max: rsSubMax ? parseFloat(rsSubMax) : null,
+            rs_sec_min: rsSecMin ? parseFloat(rsSecMin) : null,
+            rs_sec_max: rsSecMax ? parseFloat(rsSecMax) : null,
+            enable_ma_filter: enableMaFilter,
+            selected_sma: selectedSma,
+            selected_ema: selectedEma,
+            enable_volume_contraction_filter: enableVolumeContractionFilter,
+            selected_volume_status: selectedVolumeStatus,
+            selected_volume_classification: selectedVolumeClassification,
+            enable_price_action_filter: enablePriceActionFilter,
+            selected_price_action_strategies: selectedPriceActionStrategies,
+            version: '1.4'
         };
 
         criteriaField.value = JSON.stringify(criteria);
+        console.log('Updated criteria JSON:', criteriaField.value);
     }
 
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', function() {
-        // Initialize scan level UI
-        toggleScanLevel();
+        console.log('DOMContentLoaded: Starting initialization');
 
         // If editing, restore selections from criteria JSON
         const criteriaField = document.getElementById('criteria_json');
         if (criteriaField.value) {
+            console.log('Found existing criteria:', criteriaField.value);
             try {
                 const criteria = JSON.parse(criteriaField.value);
 
-                // Set scan level
+                // Set scan level FIRST
                 if (criteria.scan_level) {
+                    console.log('Setting scan level to:', criteria.scan_level);
                     document.querySelector(`input[name="scan_level"][value="${criteria.scan_level}"]`).checked = true;
-                    toggleScanLevel();
+                }
+
+                // THEN call toggleScanLevel to show/hide appropriate UI (this will clear other levels)
+                toggleScanLevel();
+
+                // THEN restore the selections for the current level
+                // Restore stage selections
+                if (criteria.selected_stages && criteria.selected_stages.length > 0) {
+                    console.log('Restoring stage selections:', criteria.selected_stages);
+                    criteria.selected_stages.forEach(id => {
+                        const checkbox = document.getElementById(`stage_${id}`);
+                        if (checkbox) {
+                            checkbox.checked = true;
+                            console.log(`Checked stage_${id}`);
+                        } else {
+                            console.warn(`Stage checkbox not found: stage_${id}`);
+                        }
+                    });
                 }
 
                 // Restore sector selections
                 if (criteria.selected_sectors && criteria.selected_sectors.length > 0) {
+                    console.log('Restoring sector selections:', criteria.selected_sectors);
                     criteria.selected_sectors.forEach(id => {
                         const checkbox = document.getElementById(`sector_${id}`);
-                        if (checkbox) checkbox.checked = true;
+                        if (checkbox) {
+                            checkbox.checked = true;
+                            console.log(`Checked sector_${id}`);
+                        } else {
+                            console.warn(`Sector checkbox not found: sector_${id}`);
+                        }
                     });
                 }
 
                 // Restore subsector selections
                 if (criteria.selected_subsectors && criteria.selected_subsectors.length > 0) {
+                    console.log('Restoring subsector selections:', criteria.selected_subsectors);
                     criteria.selected_subsectors.forEach(id => {
                         const checkbox = document.getElementById(`subsector_${id}`);
-                        if (checkbox) checkbox.checked = true;
+                        if (checkbox) {
+                            checkbox.checked = true;
+                            console.log(`Checked subsector_${id}`);
+                        } else {
+                            console.warn(`Subsector checkbox not found: subsector_${id}`);
+                        }
                     });
                 }
 
+                // Restore enable/disable toggles
+                if (criteria.enable_scan_level_filter !== undefined) {
+                    document.getElementById('enableScanLevelFilter').checked = criteria.enable_scan_level_filter;
+                    toggleScanLevelFilterSection();
+                    console.log('Restored enable_scan_level_filter:', criteria.enable_scan_level_filter);
+                }
+
+                if (criteria.enable_rs_filter !== undefined) {
+                    document.getElementById('enableRsFilter').checked = criteria.enable_rs_filter;
+                    toggleRsFilterSection();
+                    console.log('Restored enable_rs_filter:', criteria.enable_rs_filter);
+                }
+
+                // Restore RS values
+                if (criteria.rs_sub_min !== null && criteria.rs_sub_min !== undefined) {
+                    document.getElementById('rsSubMin').value = criteria.rs_sub_min;
+                    console.log('Restored rs_sub_min:', criteria.rs_sub_min);
+                }
+                if (criteria.rs_sub_max !== null && criteria.rs_sub_max !== undefined) {
+                    document.getElementById('rsSubMax').value = criteria.rs_sub_max;
+                    console.log('Restored rs_sub_max:', criteria.rs_sub_max);
+                }
+                if (criteria.rs_sec_min !== null && criteria.rs_sec_min !== undefined) {
+                    document.getElementById('rsSecMin').value = criteria.rs_sec_min;
+                    console.log('Restored rs_sec_min:', criteria.rs_sec_min);
+                }
+                if (criteria.rs_sec_max !== null && criteria.rs_sec_max !== undefined) {
+                    document.getElementById('rsSecMax').value = criteria.rs_sec_max;
+                    console.log('Restored rs_sec_max:', criteria.rs_sec_max);
+                }
+
+                // Restore MA filter toggle
+                if (criteria.enable_ma_filter !== undefined) {
+                    document.getElementById('enableMaFilter').checked = criteria.enable_ma_filter;
+                    toggleMaFilterSection();
+                    console.log('Restored enable_ma_filter:', criteria.enable_ma_filter);
+                }
+
+                // Restore SMA selections
+                if (criteria.selected_sma && criteria.selected_sma.length > 0) {
+                    console.log('Restoring SMA selections:', criteria.selected_sma);
+                    criteria.selected_sma.forEach(period => {
+                        const checkbox = document.getElementById(`sma${period}`);
+                        if (checkbox) {
+                            checkbox.checked = true;
+                            console.log(`Checked sma${period}`);
+                        }
+                    });
+                }
+
+                // Restore EMA selections
+                if (criteria.selected_ema && criteria.selected_ema.length > 0) {
+                    console.log('Restoring EMA selections:', criteria.selected_ema);
+                    criteria.selected_ema.forEach(period => {
+                        const checkbox = document.getElementById(`ema${period}`);
+                        if (checkbox) {
+                            checkbox.checked = true;
+                            console.log(`Checked ema${period}`);
+                        }
+                    });
+                }
+
+                // Restore Volume Contraction filter toggle
+                if (criteria.enable_volume_contraction_filter !== undefined) {
+                    document.getElementById('enableVolumeContractionFilter').checked = criteria.enable_volume_contraction_filter;
+                    toggleVolumeContractionFilterSection();
+                    console.log('Restored enable_volume_contraction_filter:', criteria.enable_volume_contraction_filter);
+                }
+
+                // Restore Volume Status selections
+                if (criteria.selected_volume_status && criteria.selected_volume_status.length > 0) {
+                    console.log('Restoring Volume Status selections:', criteria.selected_volume_status);
+                    criteria.selected_volume_status.forEach(status => {
+                        const checkbox = document.getElementById(`status_${status}`);
+                        if (checkbox) {
+                            checkbox.checked = true;
+                            console.log(`Checked status_${status}`);
+                        }
+                    });
+                }
+
+                // Restore Volume Classification selections
+                if (criteria.selected_volume_classification && criteria.selected_volume_classification.length > 0) {
+                    console.log('Restoring Volume Classification selections:', criteria.selected_volume_classification);
+                    criteria.selected_volume_classification.forEach(classification => {
+                        const checkbox = document.getElementById(`classification_${classification}`);
+                        if (checkbox) {
+                            checkbox.checked = true;
+                            console.log(`Checked classification_${classification}`);
+                        }
+                    });
+                }
+
+                // Restore Price Action filter toggle
+                if (criteria.enable_price_action_filter !== undefined) {
+                    document.getElementById('enablePriceActionFilter').checked = criteria.enable_price_action_filter;
+                    togglePriceActionFilterSection();
+                    console.log('Restored enable_price_action_filter:', criteria.enable_price_action_filter);
+                }
+
+                // Restore Price Action Strategy selections
+                if (criteria.selected_price_action_strategies && criteria.selected_price_action_strategies.length > 0) {
+                    console.log('Restoring Price Action Strategy selections:', criteria.selected_price_action_strategies);
+                    criteria.selected_price_action_strategies.forEach(strategy => {
+                        const checkbox = document.getElementById(`${strategy}_stage`);
+                        if (checkbox) {
+                            checkbox.checked = true;
+                            console.log(`Checked ${strategy}_stage`);
+                        }
+                    });
+                }
+
+                // Update the summary and criteria JSON
                 updateSelections();
+                console.log('Initialization complete, selections restored');
             } catch (e) {
                 console.error('Error parsing criteria JSON:', e);
             }
+        } else {
+            console.log('No existing criteria, initializing with default scan level');
+            // No existing criteria - this is a new profile
+            // Initialize the UI for the default scan level
+            toggleScanLevel();
         }
     });
 
@@ -423,13 +1136,94 @@
         const criteriaField = document.getElementById('criteria_json');
         const criteria = JSON.parse(criteriaField.value || '{}');
 
-        const hasSelections = (scanLevel === 'sector' && criteria.selected_sectors && criteria.selected_sectors.length > 0) ||
-                             (scanLevel === 'subsector' && criteria.selected_subsectors && criteria.selected_subsectors.length > 0);
+        console.log('Form submission validation:');
+        console.log('Scan Level:', scanLevel);
+        console.log('Criteria JSON:', criteriaField.value);
+        console.log('Parsed Criteria:', criteria);
+        console.log('Enable Scan Level Filter:', criteria.enable_scan_level_filter);
+        console.log('Enable RS Filter:', criteria.enable_rs_filter);
+        console.log('Enable MA Filter:', criteria.enable_ma_filter);
+        console.log('Enable Volume Contraction Filter:', criteria.enable_volume_contraction_filter);
+        console.log('Enable Price Action Filter:', criteria.enable_price_action_filter);
 
-        if (!hasSelections) {
+        // Check if at least one filter is enabled
+        if (!criteria.enable_scan_level_filter && !criteria.enable_rs_filter && !criteria.enable_ma_filter && !criteria.enable_volume_contraction_filter && !criteria.enable_price_action_filter) {
             e.preventDefault();
-            alert('Please select at least one ' + (scanLevel === 'sector' ? 'sector' : 'subsector') + ' to scan.');
+            alert('Please enable at least one filter (Scan Level, RS Filter, MA Filter, Volume Contraction Filter, or Price Action Filter).');
             return false;
+        }
+
+        // If scan level filter is enabled, check for selections
+        if (criteria.enable_scan_level_filter) {
+            const hasSelections = (scanLevel === 'stage' && criteria.selected_stages && criteria.selected_stages.length > 0) ||
+                                 (scanLevel === 'sector' && criteria.selected_sectors && criteria.selected_sectors.length > 0) ||
+                                 (scanLevel === 'subsector' && criteria.selected_subsectors && criteria.selected_subsectors.length > 0);
+
+            console.log('Has Selections:', hasSelections);
+
+            if (!hasSelections) {
+                e.preventDefault();
+                let itemName = 'stage';
+                if (scanLevel === 'sector') itemName = 'sector';
+                else if (scanLevel === 'subsector') itemName = 'subsector';
+                alert('Please select at least one ' + itemName + ' to scan, or disable the Scan Level Filter.');
+                return false;
+            }
+        }
+
+        // If RS filter is enabled, check for at least one RS value
+        if (criteria.enable_rs_filter) {
+            const hasRsValues = criteria.rs_sub_min !== null || criteria.rs_sub_max !== null ||
+                               criteria.rs_sec_min !== null || criteria.rs_sec_max !== null;
+
+            console.log('Has RS Values:', hasRsValues);
+
+            if (!hasRsValues) {
+                e.preventDefault();
+                alert('Please enter at least one RS filter value (min or max for subsector or sector), or disable the RS Filter.');
+                return false;
+            }
+        }
+
+        // If MA filter is enabled, check for at least one MA selection
+        if (criteria.enable_ma_filter) {
+            const hasMaSelections = (criteria.selected_sma && criteria.selected_sma.length > 0) ||
+                                   (criteria.selected_ema && criteria.selected_ema.length > 0);
+
+            console.log('Has MA Selections:', hasMaSelections);
+
+            if (!hasMaSelections) {
+                e.preventDefault();
+                alert('Please select at least one Moving Average (SMA or EMA), or disable the MA Filter.');
+                return false;
+            }
+        }
+
+        // If Volume Contraction filter is enabled, check for at least one selection
+        if (criteria.enable_volume_contraction_filter) {
+            const hasVolumeSelections = (criteria.selected_volume_status && criteria.selected_volume_status.length > 0) ||
+                                       (criteria.selected_volume_classification && criteria.selected_volume_classification.length > 0);
+
+            console.log('Has Volume Contraction Selections:', hasVolumeSelections);
+
+            if (!hasVolumeSelections) {
+                e.preventDefault();
+                alert('Please select at least one Volume Contraction option (Status or Classification), or disable the Volume Contraction Filter.');
+                return false;
+            }
+        }
+
+        // If Price Action filter is enabled, check for at least one selection
+        if (criteria.enable_price_action_filter) {
+            const hasPriceActionSelections = criteria.selected_price_action_strategies && criteria.selected_price_action_strategies.length > 0;
+
+            console.log('Has Price Action Selections:', hasPriceActionSelections);
+
+            if (!hasPriceActionSelections) {
+                e.preventDefault();
+                alert('Please select at least one Price Action strategy (Breakout or Pullback), or disable the Price Action Filter.');
+                return false;
+            }
         }
     });
 </script>
