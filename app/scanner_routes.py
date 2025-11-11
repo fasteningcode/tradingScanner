@@ -1334,15 +1334,58 @@ def _apply_rs_filter_debug(query, criteria):
 
     initial_count = query.count()
 
+    # Get initial RS statistics
+    total_stocks = query.count()
+    stocks_with_rs_sub = query.filter(Instrument.rs_vs_subsector.isnot(None)).count()
+    stocks_with_rs_sec = query.filter(Instrument.rs_vs_sector.isnot(None)).count()
+    stocks_without_sector = query.filter(Instrument.sector.is_(None) | (Instrument.sector == '')).count()
+
+    debug['logs'].append(f'[RS_STATS] Total stocks in query: {total_stocks}')
+    debug['logs'].append(f'[RS_STATS] Stocks with RS vs SubSector: {stocks_with_rs_sub} ({100*stocks_with_rs_sub//total_stocks if total_stocks > 0 else 0}%)')
+    debug['logs'].append(f'[RS_STATS] Stocks with RS vs Sector: {stocks_with_rs_sec} ({100*stocks_with_rs_sec//total_stocks if total_stocks > 0 else 0}%)')
+    debug['logs'].append(f'[RS_STATS] Stocks without sector assignment: {stocks_without_sector}')
+
+    # Show sample stocks with RS values
+    sample_with_rs = query.filter(Instrument.rs_vs_subsector.isnot(None)).order_by(Instrument.rs_vs_subsector.desc()).limit(5).all()
+    if sample_with_rs:
+        debug['logs'].append('[RS_SAMPLES] Top 5 stocks by RS vs SubSector:')
+        for stock in sample_with_rs:
+            debug['logs'].append(f'  - {stock.tradingsymbol}: RS_Sub={stock.rs_vs_subsector:.2f}, RS_Sec={stock.rs_vs_sector:.2f}, Sector={stock.sector or "None"}, SubSector={stock.sub_sector or "None"}')
+
+    # Show sample stocks without RS values
+    sample_without_rs = query.filter(Instrument.rs_vs_subsector.is_(None)).limit(5).all()
+    if sample_without_rs:
+        debug['logs'].append('[RS_MISSING] Sample stocks WITHOUT RS values:')
+        for stock in sample_without_rs:
+            debug['logs'].append(f'  - {stock.tradingsymbol}: Sector={stock.sector or "MISSING"}, SubSector={stock.sub_sector or "MISSING"}')
+            if not stock.sector or stock.sector == '':
+                debug['logs'].append(f'    → Cannot calculate RS without sector assignment')
+
     # Apply RS vs Subsector filters
     if rs_sub_min is not None:
+        before_filter = query.count()
         query = query.filter(Instrument.rs_vs_subsector.isnot(None))
         query = query.filter(Instrument.rs_vs_subsector >= rs_sub_min)
         count = query.count()
-        debug['logs'].append(f'[RS_FILTER] After RS Sub Min >= {rs_sub_min}: {count} stocks')
+        eliminated = before_filter - count
+        debug['logs'].append(f'[RS_FILTER] After RS Sub Min >= {rs_sub_min}: {count} stocks (eliminated {eliminated})')
+
+        # Show sample eliminated stocks
+        if eliminated > 0:
+            eliminated_stocks = Instrument.query.filter(
+                Instrument.id.in_([s.id for s in query.all()[:5]])
+            ).filter(
+                (Instrument.rs_vs_subsector < rs_sub_min) | Instrument.rs_vs_subsector.is_(None)
+            ).limit(3).all()
+            if eliminated_stocks:
+                debug['logs'].append(f'[RS_ELIMINATED] Sample stocks below RS_Sub {rs_sub_min}:')
+                for stock in eliminated_stocks:
+                    rs_val = stock.rs_vs_subsector if stock.rs_vs_subsector is not None else 'NULL'
+                    debug['logs'].append(f'  - {stock.tradingsymbol}: RS_Sub={rs_val}')
+
         debug['steps'].append({
             'description': f'RS vs Subsector >= {rs_sub_min}',
-            'details': f'Eliminated {initial_count - count} stocks below minimum',
+            'details': f'Eliminated {eliminated} stocks below minimum threshold',
             'criteria': f'Minimum RS vs Subsector: {rs_sub_min}',
             'count': count,
             'passed': count > 0
@@ -1350,13 +1393,15 @@ def _apply_rs_filter_debug(query, criteria):
         initial_count = count
 
     if rs_sub_max is not None:
+        before_filter = query.count()
         query = query.filter(Instrument.rs_vs_subsector.isnot(None))
         query = query.filter(Instrument.rs_vs_subsector <= rs_sub_max)
         count = query.count()
-        debug['logs'].append(f'[RS_FILTER] After RS Sub Max <= {rs_sub_max}: {count} stocks')
+        eliminated = before_filter - count
+        debug['logs'].append(f'[RS_FILTER] After RS Sub Max <= {rs_sub_max}: {count} stocks (eliminated {eliminated})')
         debug['steps'].append({
             'description': f'RS vs Subsector <= {rs_sub_max}',
-            'details': f'Eliminated {initial_count - count} stocks above maximum',
+            'details': f'Eliminated {eliminated} stocks above maximum threshold',
             'criteria': f'Maximum RS vs Subsector: {rs_sub_max}',
             'count': count,
             'passed': count > 0
@@ -1365,13 +1410,15 @@ def _apply_rs_filter_debug(query, criteria):
 
     # Apply RS vs Sector filters
     if rs_sec_min is not None:
+        before_filter = query.count()
         query = query.filter(Instrument.rs_vs_sector.isnot(None))
         query = query.filter(Instrument.rs_vs_sector >= rs_sec_min)
         count = query.count()
-        debug['logs'].append(f'[RS_FILTER] After RS Sec Min >= {rs_sec_min}: {count} stocks')
+        eliminated = before_filter - count
+        debug['logs'].append(f'[RS_FILTER] After RS Sec Min >= {rs_sec_min}: {count} stocks (eliminated {eliminated})')
         debug['steps'].append({
             'description': f'RS vs Sector >= {rs_sec_min}',
-            'details': f'Eliminated {initial_count - count} stocks below minimum',
+            'details': f'Eliminated {eliminated} stocks below minimum threshold',
             'criteria': f'Minimum RS vs Sector: {rs_sec_min}',
             'count': count,
             'passed': count > 0
@@ -1379,27 +1426,39 @@ def _apply_rs_filter_debug(query, criteria):
         initial_count = count
 
     if rs_sec_max is not None:
+        before_filter = query.count()
         query = query.filter(Instrument.rs_vs_sector.isnot(None))
         query = query.filter(Instrument.rs_vs_sector <= rs_sec_max)
         count = query.count()
-        debug['logs'].append(f'[RS_FILTER] After RS Sec Max <= {rs_sec_max}: {count} stocks')
+        eliminated = before_filter - count
+        debug['logs'].append(f'[RS_FILTER] After RS Sec Max <= {rs_sec_max}: {count} stocks (eliminated {eliminated})')
         debug['steps'].append({
             'description': f'RS vs Sector <= {rs_sec_max}',
-            'details': f'Eliminated {initial_count - count} stocks above maximum',
+            'details': f'Eliminated {eliminated} stocks above maximum threshold',
             'criteria': f'Maximum RS vs Sector: {rs_sec_max}',
             'count': count,
             'passed': count > 0
         })
 
     if not rs_sub_min and not rs_sub_max and not rs_sec_min and not rs_sec_max:
-        debug['logs'].append(f'[RS_FILTER] No RS filter applied')
+        debug['logs'].append(f'[RS_FILTER] No RS filter applied (all ranges set to [-100, 100])')
         count = query.count()
         debug['steps'].append({
             'description': 'No RS Filter Applied',
-            'details': 'No RS criteria specified',
+            'details': 'All RS criteria set to full range [-100, 100]',
             'count': count,
             'passed': True
         })
+
+    # Final RS distribution of matched stocks
+    final_stocks = query.limit(100).all()
+    if final_stocks:
+        rs_sub_values = [s.rs_vs_subsector for s in final_stocks if s.rs_vs_subsector is not None]
+        rs_sec_values = [s.rs_vs_sector for s in final_stocks if s.rs_vs_sector is not None]
+        if rs_sub_values:
+            debug['logs'].append(f'[RS_DISTRIBUTION] Matched stocks RS vs SubSector: Min={min(rs_sub_values):.2f}, Max={max(rs_sub_values):.2f}, Avg={sum(rs_sub_values)/len(rs_sub_values):.2f}')
+        if rs_sec_values:
+            debug['logs'].append(f'[RS_DISTRIBUTION] Matched stocks RS vs Sector: Min={min(rs_sec_values):.2f}, Max={max(rs_sec_values):.2f}, Avg={sum(rs_sec_values)/len(rs_sec_values):.2f}')
 
     return query, debug
 
