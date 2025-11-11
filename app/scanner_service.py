@@ -789,8 +789,8 @@ class Scanner:
                     tradingsymbol=stock.tradingsymbol,
                     current_price=result_data['current_price'],
                     stage=stock.current_stage,
-                    sector_name=stock.sector.name if stock.sector else None,
-                    subsector_name=stock.sub_sector.name if stock.sub_sector else None,
+                    sector_name=stock.sector,  # Already a string
+                    subsector_name=stock.sub_sector,  # Already a string
                     rs_vs_subsector=stock.rs_vs_subsector,
                     rs_vs_sector=stock.rs_vs_sector,
                     volume_dryup_status=stock.volume_dryup_status,
