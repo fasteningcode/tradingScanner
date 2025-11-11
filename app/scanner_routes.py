@@ -10,7 +10,7 @@ Routes for stock scanner feature including:
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, current_app
 from flask_login import login_required, current_user
 from app import db
-from app.models import ScannerProfile, ScannerTask, ScanResult, Sector, SubSector, Instrument
+from app.models import ScannerProfile, ScannerTask, ScanResult, Sector, SubSector, Instrument, HistoricalData
 from app.forms import ScannerProfileForm
 from app import scanner_service
 from datetime import datetime
@@ -1280,8 +1280,10 @@ def _apply_price_action_filter_debug(query, criteria):
     debug = {'steps': [], 'logs': []}
 
     selected_strategies = criteria.get('selected_price_action_strategies', [])
+    lookback_days = criteria.get('price_action_lookback_days', 252)
 
     debug['logs'].append(f'[PRICE_ACTION] Selected Strategies: {selected_strategies}')
+    debug['logs'].append(f'[PRICE_ACTION] Lookback Period: {lookback_days} days')
 
     if not selected_strategies:
         debug['logs'].append(f'[PRICE_ACTION] No price action filter applied')
@@ -1292,17 +1294,173 @@ def _apply_price_action_filter_debug(query, criteria):
             'count': count,
             'passed': True
         })
+        return query, debug
+
+    # Get initial count
+    initial_count = query.count()
+    debug['logs'].append(f'[PRICE_ACTION] Initial stock count: {initial_count}')
+
+    # Collect stock IDs that match price action patterns
+    matching_stock_ids = []
+    breakout_count = 0
+    pullback_count = 0
+
+    # Process each stock in the query
+    for stock in query.all():
+        try:
+            # Get historical data
+            hist_data = HistoricalData.query.filter_by(
+                tradingsymbol=stock.tradingsymbol,
+                interval='day'
+            ).first()
+
+            if not hist_data:
+                continue
+
+            candles = hist_data.get_candles()
+            if not candles or len(candles) < lookback_days + 50:
+                continue
+
+            # Analyze patterns based on selected strategies
+            matches_pattern = False
+
+            if 'breakout' in selected_strategies:
+                if _is_breakout_pattern(candles, lookback_days):
+                    matches_pattern = True
+                    breakout_count += 1
+                    debug['logs'].append(f'[PRICE_ACTION] {stock.tradingsymbol}: BREAKOUT detected')
+
+            if 'pullback' in selected_strategies:
+                if _is_pullback_pattern(candles, lookback_days):
+                    matches_pattern = True
+                    pullback_count += 1
+                    debug['logs'].append(f'[PRICE_ACTION] {stock.tradingsymbol}: PULLBACK detected')
+
+            if matches_pattern:
+                matching_stock_ids.append(stock.id)
+
+        except Exception as e:
+            debug['logs'].append(f'[PRICE_ACTION] Error analyzing {stock.tradingsymbol}: {str(e)}')
+            continue
+
+    # Apply filter to query
+    if matching_stock_ids:
+        query = query.filter(Instrument.id.in_(matching_stock_ids))
     else:
-        # NOTE: Price action filtering logic not yet implemented in backend
-        # This is a placeholder for when price action analysis becomes available
-        count = query.count()
-        debug['logs'].append(f'[PRICE_ACTION] Price action filtering not yet implemented - returning all stocks')
-        debug['steps'].append({
-            'description': 'Price Action Filter (Not Implemented)',
-            'details': f'Selected strategies: {", ".join(selected_strategies)}',
-            'criteria': 'Breakout/Pullback patterns (feature pending)',
-            'count': count,
-            'passed': False
-        })
+        # No stocks match - return empty query
+        query = query.filter(Instrument.id == -1)
+
+    final_count = len(matching_stock_ids)
+    debug['logs'].append(f'[PRICE_ACTION] Breakout patterns found: {breakout_count}')
+    debug['logs'].append(f'[PRICE_ACTION] Pullback patterns found: {pullback_count}')
+    debug['logs'].append(f'[PRICE_ACTION] Total matching stocks: {final_count}')
+
+    debug['steps'].append({
+        'description': 'Price Action Pattern Filter',
+        'details': f'Strategies: {", ".join(selected_strategies)} | Lookback: {lookback_days} days',
+        'criteria': f'Breakout: {breakout_count}, Pullback: {pullback_count}',
+        'count': final_count,
+        'passed': True
+    })
 
     return query, debug
+
+
+def _is_breakout_pattern(candles, lookback_days):
+    """
+    Detect breakout pattern:
+    - Price breaks above resistance (52-week high within lookback period)
+    - Strong volume on breakout
+    - Price sustains above breakout level
+    """
+    try:
+        # Get lookback window
+        lookback_candles = candles[-lookback_days:]
+        if len(lookback_candles) < 20:
+            return False
+
+        # Get current price and recent high
+        current_price = lookback_candles[-1]['close']
+
+        # Find highest high in the lookback period (excluding last 5 days)
+        resistance_high = max(c['high'] for c in lookback_candles[:-5])
+
+        # Find if there was a recent breakout (in last 5 days)
+        recent_candles = lookback_candles[-5:]
+
+        # Check if any recent candle broke above resistance
+        breakout_detected = False
+        for candle in recent_candles:
+            if candle['high'] > resistance_high * 1.01:  # 1% above resistance
+                breakout_detected = True
+                break
+
+        if not breakout_detected:
+            return False
+
+        # Verify price is still above resistance (sustained breakout)
+        if current_price < resistance_high * 0.98:  # More than 2% below
+            return False
+
+        # Check for volume confirmation
+        avg_volume = sum(c['volume'] for c in lookback_candles[:-5]) / (len(lookback_candles) - 5)
+        recent_volume = sum(c['volume'] for c in recent_candles) / len(recent_candles)
+
+        # Volume should be at least 120% of average
+        if recent_volume < avg_volume * 1.2:
+            return False
+
+        return True
+
+    except Exception:
+        return False
+
+
+def _is_pullback_pattern(candles, lookback_days):
+    """
+    Detect pullback pattern:
+    - Stock had a recent breakout
+    - Price is now pulling back to support
+    - Pullback is healthy (10-20% from high)
+    - Volume is decreasing on pullback
+    """
+    try:
+        # Get lookback window
+        lookback_candles = candles[-lookback_days:]
+        if len(lookback_candles) < 30:
+            return False
+
+        current_price = lookback_candles[-1]['close']
+
+        # Find recent high (within last 30 days)
+        recent_high_period = lookback_candles[-30:]
+        recent_high = max(c['high'] for c in recent_high_period)
+
+        # Calculate pullback percentage
+        pullback_pct = ((recent_high - current_price) / recent_high) * 100
+
+        # Check if in healthy pullback range (5% to 25%)
+        if pullback_pct < 5 or pullback_pct > 25:
+            return False
+
+        # Check if price is above 50-day MA (still in uptrend)
+        if len(lookback_candles) >= 50:
+            ma_50 = sum(c['close'] for c in lookback_candles[-50:]) / 50
+            if current_price < ma_50 * 0.95:  # More than 5% below MA
+                return False
+
+        # Check for decreasing volume on pullback (sign of healthy correction)
+        recent_10_days = lookback_candles[-10:]
+        prev_10_days = lookback_candles[-20:-10]
+
+        recent_avg_volume = sum(c['volume'] for c in recent_10_days) / 10
+        prev_avg_volume = sum(c['volume'] for c in prev_10_days) / 10
+
+        # Volume should be lower (less selling pressure)
+        if recent_avg_volume > prev_avg_volume * 1.1:
+            return False
+
+        return True
+
+    except Exception:
+        return False

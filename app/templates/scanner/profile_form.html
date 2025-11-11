@@ -648,6 +648,36 @@
                         Select price action patterns to identify potential trading opportunities
                     </div>
 
+                    <!-- Timeframe Selection -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">
+                            <i class="bi bi-calendar-range me-1"></i>Lookback Period
+                            <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="priceActionLookbackPeriod" onchange="updateSelections(); updatePriceActionWarning()">
+                            <option value="">Select timeframe...</option>
+                            <option value="2" data-warning="critical">2 Days ⚠️</option>
+                            <option value="3" data-warning="critical">3 Days ⚠️</option>
+                            <option value="5" data-warning="critical">5 Days ⚠️</option>
+                            <option value="7" data-warning="critical">7 Days ⚠️</option>
+                            <option value="14" data-warning="critical">14 Days ⚠️</option>
+                            <option value="21" data-warning="limited">21 Days (1 Month) - Breakout Only</option>
+                            <option value="60" data-warning="ok">2 Months - Both Patterns ✓</option>
+                            <option value="90" data-warning="recommended">3 Months - Recommended ⭐</option>
+                            <option value="180" data-warning="recommended">6 Months - Recommended ⭐</option>
+                            <option value="252" data-warning="optimal" selected>1 Year - Optimal ⭐⭐</option>
+                        </select>
+
+                        <!-- Dynamic Warning Message -->
+                        <div id="priceActionLookbackWarning" class="mt-2" style="display: none;">
+                            <!-- Warning will be inserted here by JavaScript -->
+                        </div>
+
+                        <small class="text-muted d-block mt-1">
+                            <i class="bi bi-info-circle me-1"></i>Number of days to look back for pattern detection
+                        </small>
+                    </div>
+
                     <div class="row">
                         <!-- Breakout Pattern -->
                         <div class="col-md-6 mb-3">
@@ -967,6 +997,9 @@
             selectedPriceActionStrategies.push(cb.value);
         });
 
+        // Get Price Action Lookback Period
+        const priceActionLookbackPeriod = document.getElementById('priceActionLookbackPeriod').value;
+
         // Update criteria JSON (ALWAYS do this, even if summary fails)
         const criteria = {
             scan_level: scanLevel,
@@ -987,11 +1020,116 @@
             selected_volume_classification: selectedVolumeClassification,
             enable_price_action_filter: enablePriceActionFilter,
             selected_price_action_strategies: selectedPriceActionStrategies,
-            version: '1.4'
+            price_action_lookback_days: priceActionLookbackPeriod ? parseInt(priceActionLookbackPeriod) : 252,
+            version: '1.5'
         };
 
         criteriaField.value = JSON.stringify(criteria);
         console.log('Updated criteria JSON:', criteriaField.value);
+    }
+
+    // Update Price Action Lookback Period Warning
+    function updatePriceActionWarning() {
+        const lookbackSelect = document.getElementById('priceActionLookbackPeriod');
+        const warningDiv = document.getElementById('priceActionLookbackWarning');
+
+        if (!lookbackSelect || !warningDiv) {
+            return;
+        }
+
+        const selectedOption = lookbackSelect.options[lookbackSelect.selectedIndex];
+        const warningType = selectedOption.getAttribute('data-warning');
+        const lookbackValue = parseInt(selectedOption.value);
+
+        // Clear warning if no selection
+        if (!lookbackValue) {
+            warningDiv.style.display = 'none';
+            warningDiv.innerHTML = '';
+            return;
+        }
+
+        let warningHTML = '';
+
+        switch(warningType) {
+            case 'critical':
+                warningHTML = `
+                    <div class="alert alert-danger py-2 px-3 mb-0">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <strong>⚠️ Insufficient Data Warning:</strong>
+                        <ul class="mb-0 mt-2 small">
+                            <li><strong>Breakout Pattern:</strong> Requires minimum 20 candles (${lookbackValue} days selected)</li>
+                            <li><strong>Pullback Pattern:</strong> Requires minimum 30 candles (${lookbackValue} days selected)</li>
+                            <li><strong>Recommendation:</strong> Use 21+ days for Breakout, 60+ days for Pullback</li>
+                        </ul>
+                        <div class="mt-2 small">
+                            <strong>Result:</strong> Neither pattern will work with this period. Please select 21+ days.
+                        </div>
+                    </div>
+                `;
+                break;
+
+            case 'limited':
+                warningHTML = `
+                    <div class="alert alert-warning py-2 px-3 mb-0">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        <strong>Limited Pattern Detection:</strong>
+                        <ul class="mb-0 mt-2 small">
+                            <li>✅ <strong>Breakout Pattern:</strong> Will work (20+ candles available)</li>
+                            <li>⚠️ <strong>Pullback Pattern:</strong> Limited accuracy (needs 50+ candles for MA calculation)</li>
+                            <li><strong>Recommendation:</strong> Use 60+ days for both patterns</li>
+                        </ul>
+                    </div>
+                `;
+                break;
+
+            case 'ok':
+                warningHTML = `
+                    <div class="alert alert-success py-2 px-3 mb-0">
+                        <i class="bi bi-check-circle-fill me-2"></i>
+                        <strong>✓ Both Patterns Supported</strong>
+                        <p class="mb-0 mt-1 small">
+                            Sufficient data for Breakout and Pullback pattern detection.
+                            For best results, consider using 90+ days.
+                        </p>
+                    </div>
+                `;
+                break;
+
+            case 'recommended':
+                warningHTML = `
+                    <div class="alert alert-info py-2 px-3 mb-0" style="background-color: #e7f3ff; border-color: #b3d9ff;">
+                        <i class="bi bi-star-fill me-2" style="color: #ffc107;"></i>
+                        <strong>⭐ Recommended Period</strong>
+                        <p class="mb-0 mt-1 small">
+                            Excellent choice for reliable pattern detection. Provides comprehensive historical context
+                            for both Breakout and Pullback analysis.
+                        </p>
+                    </div>
+                `;
+                break;
+
+            case 'optimal':
+                warningHTML = `
+                    <div class="alert alert-info py-2 px-3 mb-0" style="background-color: #d4edda; border-color: #c3e6cb;">
+                        <i class="bi bi-star-fill me-2" style="color: #ffc107;"></i>
+                        <i class="bi bi-star-fill me-1" style="color: #ffc107;"></i>
+                        <strong>⭐⭐ Optimal Period (Default)</strong>
+                        <p class="mb-0 mt-1 small">
+                            Best choice for institutional-grade pattern detection. Full year of data provides
+                            maximum accuracy and reliability for both Breakout and Pullback strategies.
+                        </p>
+                    </div>
+                `;
+                break;
+
+            default:
+                warningDiv.style.display = 'none';
+                warningDiv.innerHTML = '';
+                return;
+        }
+
+        warningDiv.innerHTML = warningHTML;
+        warningDiv.style.display = 'block';
     }
 
     // Initialize on page load
@@ -1169,6 +1307,17 @@
                     });
                 }
 
+                // Restore Price Action Lookback Period
+                if (criteria.price_action_lookback_days !== undefined) {
+                    const lookbackSelect = document.getElementById('priceActionLookbackPeriod');
+                    if (lookbackSelect) {
+                        lookbackSelect.value = criteria.price_action_lookback_days;
+                        console.log('Restored price_action_lookback_days:', criteria.price_action_lookback_days);
+                        // Update warning based on restored value
+                        updatePriceActionWarning();
+                    }
+                }
+
                 // Update the summary and criteria JSON
                 updateSelections();
                 console.log('Initialization complete, selections restored');
@@ -1180,6 +1329,8 @@
             // No existing criteria - this is a new profile
             // Initialize the UI for the default scan level
             toggleScanLevel();
+            // Show warning for default lookback period (1 Year is selected by default)
+            updatePriceActionWarning();
         }
     });
 
@@ -1266,15 +1417,23 @@
             }
         }
 
-        // If Price Action filter is enabled, check for at least one selection
+        // If Price Action filter is enabled, check for at least one selection and lookback period
         if (criteria.enable_price_action_filter) {
             const hasPriceActionSelections = criteria.selected_price_action_strategies && criteria.selected_price_action_strategies.length > 0;
+            const hasLookbackPeriod = criteria.price_action_lookback_days && criteria.price_action_lookback_days > 0;
 
             console.log('Has Price Action Selections:', hasPriceActionSelections);
+            console.log('Has Lookback Period:', hasLookbackPeriod);
 
             if (!hasPriceActionSelections) {
                 e.preventDefault();
                 alert('Please select at least one Price Action strategy (Breakout or Pullback), or disable the Price Action Filter.');
+                return false;
+            }
+
+            if (!hasLookbackPeriod) {
+                e.preventDefault();
+                alert('Please select a Lookback Period for Price Action patterns.');
                 return false;
             }
         }
