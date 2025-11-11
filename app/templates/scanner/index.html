@@ -309,6 +309,7 @@
                                     <th>Progress</th>
                                     <th>Matched</th>
                                     <th>Duration</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -347,6 +348,19 @@
                                             {% if task.started_at and task.completed_at %}
                                                 {% set duration = (task.completed_at - task.started_at).total_seconds() %}
                                                 <small>{{ "%.1f"|format(duration) }}s</small>
+                                            {% else %}
+                                                <span class="text-muted">--</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if task.status == 'completed' %}
+                                                <a href="{{ url_for('scanner.view_task_results', task_id=task.id) }}" class="btn btn-sm btn-primary">
+                                                    <i class="bi bi-eye me-1"></i>View Results
+                                                </a>
+                                            {% elif task.matched_stocks > 0 %}
+                                                <a href="{{ url_for('scanner.view_task_results', task_id=task.id) }}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="bi bi-eye me-1"></i>View
+                                                </a>
                                             {% else %}
                                                 <span class="text-muted">--</span>
                                             {% endif %}

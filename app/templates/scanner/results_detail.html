@@ -1,0 +1,435 @@
+{% extends "base.html" %}
+
+{% block title %}Scan Results - {{ task.profile.name if task.profile else 'Unknown Profile' }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2>
+                    <i class="bi bi-list-check me-2"></i>Scan Results
+                </h2>
+                <div>
+                    <a href="{{ url_for('scanner.index') }}" class="btn btn-secondary">
+                        <i class="bi bi-arrow-left me-2"></i>Back to Scanner
+                    </a>
+                    <a href="{{ url_for('scanner.debug_task_results', task_id=task.id) }}" class="btn btn-info" target="_blank">
+                        <i class="bi bi-bug me-2"></i>Debug View
+                    </a>
+                </div>
+            </div>
+
+            <!-- Scan Info Card -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <h6 class="text-muted">Profile Name</h6>
+                            <p class="mb-0"><strong>{{ task.profile.name if task.profile else 'Unknown' }}</strong></p>
+                        </div>
+                        <div class="col-md-2">
+                            <h6 class="text-muted">Status</h6>
+                            <p class="mb-0">
+                                {% if task.status == 'completed' %}
+                                    <span class="badge bg-success">Completed</span>
+                                {% elif task.status == 'running' %}
+                                    <span class="badge bg-primary">Running</span>
+                                {% elif task.status == 'failed' %}
+                                    <span class="badge bg-danger">Failed</span>
+                                {% elif task.status == 'cancelled' %}
+                                    <span class="badge bg-warning">Cancelled</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ task.status }}</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="col-md-2">
+                            <h6 class="text-muted">Matched Stocks</h6>
+                            <p class="mb-0"><strong class="text-success">{{ task.matched_stocks }}</strong></p>
+                        </div>
+                        <div class="col-md-2">
+                            <h6 class="text-muted">Total Scanned</h6>
+                            <p class="mb-0"><strong>{{ task.scanned_stocks }}</strong></p>
+                        </div>
+                        <div class="col-md-3">
+                            <h6 class="text-muted">Completed At</h6>
+                            <p class="mb-0">
+                                {% if task.completed_at %}
+                                    {{ task.completed_at.strftime('%b %d, %Y %I:%M %p') }}
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search and Filter Controls -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="bi bi-search"></i>
+                                </span>
+                                <input type="text" class="form-control" id="searchInput" placeholder="Search by symbol...">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" id="sortBy">
+                                <option value="scan_rank">Sort by: Rank</option>
+                                <option value="tradingsymbol">Sort by: Symbol</option>
+                                <option value="current_price">Sort by: Price</option>
+                                <option value="rs_vs_subsector">Sort by: RS (SubSector)</option>
+                                <option value="scan_score">Sort by: Score</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-select" id="sortOrder">
+                                <option value="asc">Ascending</option>
+                                <option value="desc">Descending</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" id="perPage">
+                                <option value="25">25 per page</option>
+                                <option value="50" selected>50 per page</option>
+                                <option value="100">100 per page</option>
+                                <option value="200">200 per page</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Table -->
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-table me-2"></i>Matched Stocks
+                        <span class="badge bg-success ms-2" id="resultsCount">0</span>
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div id="loadingSpinner" class="text-center p-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-3 text-muted">Loading results...</p>
+                    </div>
+
+                    <div id="noResultsMessage" class="text-center p-5" style="display: none;">
+                        <i class="bi bi-inbox" style="font-size: 3rem; color: #ccc;"></i>
+                        <p class="mt-3 text-muted">No stocks matched the search criteria</p>
+                    </div>
+
+                    <div id="resultsTableContainer" style="display: none;">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-striped mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 50px;">Rank</th>
+                                        <th style="width: 120px;">Symbol</th>
+                                        <th style="width: 250px;">Name</th>
+                                        <th style="width: 100px;">Price</th>
+                                        <th style="width: 70px;">Stage</th>
+                                        <th style="width: 90px;">RS (Sub)</th>
+                                        <th style="width: 90px;">RS (Sec)</th>
+                                        <th style="width: 120px;">Volume Status</th>
+                                        <th style="width: 150px;">MA Above</th>
+                                        <th style="width: 120px;">Pattern</th>
+                                        <th style="width: 80px;">Score</th>
+                                        <th style="width: 80px;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="resultsTableBody">
+                                    <!-- Populated by JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Pagination -->
+                        <div class="d-flex justify-content-between align-items-center p-3 border-top">
+                            <div class="text-muted">
+                                Showing <span id="showingStart">0</span> to <span id="showingEnd">0</span> of <span id="totalResults">0</span> results
+                            </div>
+                            <nav>
+                                <ul class="pagination mb-0" id="pagination">
+                                    <!-- Populated by JavaScript -->
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentPage = 1;
+    let currentSearch = '';
+    let currentSortBy = 'scan_rank';
+    let currentOrder = 'asc';
+    let currentPerPage = 50;
+    let searchTimeout = null;
+
+    // Load results on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        loadResults();
+
+        // Event listeners
+        document.getElementById('searchInput').addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                currentSearch = this.value;
+                currentPage = 1;
+                loadResults();
+            }, 500);
+        });
+
+        document.getElementById('sortBy').addEventListener('change', function() {
+            currentSortBy = this.value;
+            currentPage = 1;
+            loadResults();
+        });
+
+        document.getElementById('sortOrder').addEventListener('change', function() {
+            currentOrder = this.value;
+            currentPage = 1;
+            loadResults();
+        });
+
+        document.getElementById('perPage').addEventListener('change', function() {
+            currentPerPage = parseInt(this.value);
+            currentPage = 1;
+            loadResults();
+        });
+    });
+
+    async function loadResults() {
+        const taskId = {{ task.id }};
+        const url = `/scanner/api/results/${taskId}?page=${currentPage}&per_page=${currentPerPage}&search=${encodeURIComponent(currentSearch)}&sort_by=${currentSortBy}&order=${currentOrder}`;
+
+        try {
+            // Show loading
+            document.getElementById('loadingSpinner').style.display = 'block';
+            document.getElementById('noResultsMessage').style.display = 'none';
+            document.getElementById('resultsTableContainer').style.display = 'none';
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.success) {
+                displayResults(data.results, data.pagination);
+            } else {
+                showError(data.error || 'Failed to load results');
+            }
+        } catch (error) {
+            showError('Network error: ' + error.message);
+        }
+    }
+
+    function displayResults(results, pagination) {
+        document.getElementById('loadingSpinner').style.display = 'none';
+
+        if (results.length === 0) {
+            document.getElementById('noResultsMessage').style.display = 'block';
+            document.getElementById('resultsTableContainer').style.display = 'none';
+            return;
+        }
+
+        // Show table
+        document.getElementById('noResultsMessage').style.display = 'none';
+        document.getElementById('resultsTableContainer').style.display = 'block';
+
+        // Update counts
+        document.getElementById('resultsCount').textContent = pagination.total;
+        document.getElementById('showingStart').textContent = ((pagination.page - 1) * pagination.per_page) + 1;
+        document.getElementById('showingEnd').textContent = Math.min(pagination.page * pagination.per_page, pagination.total);
+        document.getElementById('totalResults').textContent = pagination.total;
+
+        // Populate table
+        const tbody = document.getElementById('resultsTableBody');
+        tbody.innerHTML = '';
+
+        results.forEach(result => {
+            const row = document.createElement('tr');
+
+            // Rank
+            const rankCell = document.createElement('td');
+            rankCell.innerHTML = `<strong class="text-primary">#${result.scan_rank || '--'}</strong>`;
+            row.appendChild(rankCell);
+
+            // Symbol
+            const symbolCell = document.createElement('td');
+            symbolCell.innerHTML = `<strong>${result.tradingsymbol}</strong>`;
+            row.appendChild(symbolCell);
+
+            // Name
+            const nameCell = document.createElement('td');
+            nameCell.textContent = result.name || '--';
+            nameCell.className = 'text-muted small';
+            row.appendChild(nameCell);
+
+            // Price
+            const priceCell = document.createElement('td');
+            priceCell.textContent = result.current_price ? `₹${result.current_price.toFixed(2)}` : '--';
+            row.appendChild(priceCell);
+
+            // Stage
+            const stageCell = document.createElement('td');
+            const stageBadge = getStatusBadge(result.stage);
+            stageCell.innerHTML = stageBadge;
+            row.appendChild(stageCell);
+
+            // RS SubSector
+            const rsSubCell = document.createElement('td');
+            rsSubCell.textContent = result.rs_vs_subsector ? result.rs_vs_subsector.toFixed(2) : '--';
+            rsSubCell.className = result.rs_vs_subsector >= 65 ? 'text-success fw-bold' : '';
+            row.appendChild(rsSubCell);
+
+            // RS Sector
+            const rsSectorCell = document.createElement('td');
+            rsSectorCell.textContent = result.rs_vs_sector ? result.rs_vs_sector.toFixed(2) : '--';
+            rsSectorCell.className = result.rs_vs_sector >= 65 ? 'text-success fw-bold' : '';
+            row.appendChild(rsSectorCell);
+
+            // Volume Status
+            const volumeCell = document.createElement('td');
+            volumeCell.innerHTML = getVolumeBadge(result.volume_dryup_status, result.volume_dryup_classification);
+            row.appendChild(volumeCell);
+
+            // MA Above
+            const maCell = document.createElement('td');
+            const maAbove = result.ma_above || [];
+            maCell.innerHTML = maAbove.length > 0
+                ? maAbove.map(ma => `<span class="badge bg-info text-dark me-1">${ma}</span>`).join('')
+                : '<span class="text-muted">--</span>';
+            row.appendChild(maCell);
+
+            // Pattern
+            const patternCell = document.createElement('td');
+            patternCell.innerHTML = getPatternBadge(result.price_action_pattern);
+            row.appendChild(patternCell);
+
+            // Score
+            const scoreCell = document.createElement('td');
+            scoreCell.innerHTML = `<strong class="text-success">${result.scan_score ? result.scan_score.toFixed(2) : '--'}</strong>`;
+            row.appendChild(scoreCell);
+
+            // Actions
+            const actionsCell = document.createElement('td');
+            actionsCell.innerHTML = `
+                <a href="/stock/${result.tradingsymbol}" class="btn btn-sm btn-outline-primary" title="View Stock Details">
+                    <i class="bi bi-graph-up"></i>
+                </a>
+            `;
+            row.appendChild(actionsCell);
+
+            tbody.appendChild(row);
+        });
+
+        // Update pagination
+        updatePagination(pagination);
+    }
+
+    function getStatusBadge(stage) {
+        const badges = {
+            1: '<span class="badge bg-primary">Stage 1</span>',
+            2: '<span class="badge bg-success">Stage 2</span>',
+            3: '<span class="badge bg-warning">Stage 3</span>',
+            4: '<span class="badge bg-danger">Stage 4</span>'
+        };
+        return badges[stage] || '<span class="badge bg-secondary">--</span>';
+    }
+
+    function getVolumeBadge(status, classification) {
+        if (status === 'dry_up') {
+            return `<span class="badge bg-success">${classification || 'Dry Up'}</span>`;
+        } else if (status === 'normal') {
+            return '<span class="badge bg-secondary">Normal</span>';
+        }
+        return '<span class="text-muted">--</span>';
+    }
+
+    function getPatternBadge(pattern) {
+        if (pattern === 'breakout') {
+            return '<span class="badge bg-success"><i class="bi bi-graph-up-arrow me-1"></i>Breakout</span>';
+        } else if (pattern === 'pullback') {
+            return '<span class="badge bg-info"><i class="bi bi-arrow-down-up me-1"></i>Pullback</span>';
+        }
+        return '<span class="text-muted">--</span>';
+    }
+
+    function updatePagination(pagination) {
+        const paginationEl = document.getElementById('pagination');
+        paginationEl.innerHTML = '';
+
+        // Previous button
+        const prevLi = document.createElement('li');
+        prevLi.className = `page-item ${!pagination.has_prev ? 'disabled' : ''}`;
+        prevLi.innerHTML = `<a class="page-link" href="#" onclick="changePage(${pagination.page - 1}); return false;">Previous</a>`;
+        paginationEl.appendChild(prevLi);
+
+        // Page numbers
+        const startPage = Math.max(1, pagination.page - 2);
+        const endPage = Math.min(pagination.pages, pagination.page + 2);
+
+        if (startPage > 1) {
+            const firstLi = document.createElement('li');
+            firstLi.className = 'page-item';
+            firstLi.innerHTML = `<a class="page-link" href="#" onclick="changePage(1); return false;">1</a>`;
+            paginationEl.appendChild(firstLi);
+
+            if (startPage > 2) {
+                const ellipsisLi = document.createElement('li');
+                ellipsisLi.className = 'page-item disabled';
+                ellipsisLi.innerHTML = '<span class="page-link">...</span>';
+                paginationEl.appendChild(ellipsisLi);
+            }
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            const pageLi = document.createElement('li');
+            pageLi.className = `page-item ${i === pagination.page ? 'active' : ''}`;
+            pageLi.innerHTML = `<a class="page-link" href="#" onclick="changePage(${i}); return false;">${i}</a>`;
+            paginationEl.appendChild(pageLi);
+        }
+
+        if (endPage < pagination.pages) {
+            if (endPage < pagination.pages - 1) {
+                const ellipsisLi = document.createElement('li');
+                ellipsisLi.className = 'page-item disabled';
+                ellipsisLi.innerHTML = '<span class="page-link">...</span>';
+                paginationEl.appendChild(ellipsisLi);
+            }
+
+            const lastLi = document.createElement('li');
+            lastLi.className = 'page-item';
+            lastLi.innerHTML = `<a class="page-link" href="#" onclick="changePage(${pagination.pages}); return false;">${pagination.pages}</a>`;
+            paginationEl.appendChild(lastLi);
+        }
+
+        // Next button
+        const nextLi = document.createElement('li');
+        nextLi.className = `page-item ${!pagination.has_next ? 'disabled' : ''}`;
+        nextLi.innerHTML = `<a class="page-link" href="#" onclick="changePage(${pagination.page + 1}); return false;">Next</a>`;
+        paginationEl.appendChild(nextLi);
+    }
+
+    function changePage(page) {
+        currentPage = page;
+        loadResults();
+        window.scrollTo(0, 0);
+    }
+
+    function showError(message) {
+        document.getElementById('loadingSpinner').style.display = 'none';
+        alert('Error: ' + message);
+    }
+</script>
+{% endblock %}
