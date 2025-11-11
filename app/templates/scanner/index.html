@@ -130,6 +130,31 @@
                             </div>
                         </div>
 
+                        <!-- Detailed Status Message -->
+                        <div class="alert alert-info mb-3" id="progressMessageAlert" style="display: none;">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <span id="progressMessage">Starting scan...</span>
+                        </div>
+
+                        <!-- Filter Stage Indicators -->
+                        <div class="mb-3" id="filterStagesDiv" style="display: none;">
+                            <h6 class="mb-2 text-muted small">Filter Progress:</h6>
+                            <div class="d-flex flex-wrap gap-2">
+                                <span class="badge bg-secondary" id="filterStage">
+                                    <i class="bi bi-hourglass-split me-1"></i>Stage/Sector/RS
+                                </span>
+                                <span class="badge bg-secondary" id="filterMA">
+                                    <i class="bi bi-hourglass-split me-1"></i>Moving Averages
+                                </span>
+                                <span class="badge bg-secondary" id="filterPriceAction">
+                                    <i class="bi bi-hourglass-split me-1"></i>Price Action
+                                </span>
+                                <span class="badge bg-secondary" id="filterRanking">
+                                    <i class="bi bi-hourglass-split me-1"></i>Ranking
+                                </span>
+                            </div>
+                        </div>
+
                         <div class="row text-center mt-3">
                             <div class="col-4">
                                 <h4 class="mb-0 text-primary" id="scannedCount">0</h4>
@@ -441,6 +466,66 @@
         updateProgress(); // Immediate first update
     }
 
+    // Update Filter Stage Indicators
+    function updateFilterStages(progressMessage) {
+        if (!progressMessage) return;
+
+        const message = progressMessage.toLowerCase();
+        const filterStagesDiv = document.getElementById('filterStagesDiv');
+
+        // Show filter stages div once scanning starts
+        if (message.includes('scanning') || message.includes('applying') || message.includes('finalizing')) {
+            filterStagesDiv.style.display = 'block';
+        }
+
+        // Helper to update badge
+        function updateBadge(id, isComplete, isCurrent) {
+            const badge = document.getElementById(id);
+            if (isComplete) {
+                badge.className = 'badge bg-success';
+                badge.innerHTML = '<i class="bi bi-check-circle me-1"></i>' + badge.textContent.replace(/^.*?<\/i>/, '');
+            } else if (isCurrent) {
+                badge.className = 'badge bg-warning';
+                badge.innerHTML = '<i class="bi bi-arrow-right me-1"></i>' + badge.textContent.replace(/^.*?<\/i>/, '');
+            } else {
+                badge.className = 'badge bg-secondary';
+                badge.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>' + badge.textContent.replace(/^.*?<\/i>/, '');
+            }
+        }
+
+        // Determine which stage is current
+        if (message.includes('initializing') || message.includes('starting')) {
+            updateBadge('filterStage', false, false);
+            updateBadge('filterMA', false, false);
+            updateBadge('filterPriceAction', false, false);
+            updateBadge('filterRanking', false, false);
+        } else if (message.includes('applying initial filters') || message.includes('stage') || message.includes('rs') || message.includes('volume')) {
+            updateBadge('filterStage', false, true);
+            updateBadge('filterMA', false, false);
+            updateBadge('filterPriceAction', false, false);
+            updateBadge('filterRanking', false, false);
+        } else if (message.includes('scanning:')) {
+            // Currently scanning stocks - means initial filters complete
+            updateBadge('filterStage', true, false);
+
+            // Determine if MA or Price Action is current based on message content
+            // Since message only shows stock symbol, assume we're in scanning phase
+            updateBadge('filterMA', false, true);
+            updateBadge('filterPriceAction', false, true);
+            updateBadge('filterRanking', false, false);
+        } else if (message.includes('finalizing') || message.includes('calculating rankings')) {
+            updateBadge('filterStage', true, false);
+            updateBadge('filterMA', true, false);
+            updateBadge('filterPriceAction', true, false);
+            updateBadge('filterRanking', false, true);
+        } else if (message.includes('completed')) {
+            updateBadge('filterStage', true, false);
+            updateBadge('filterMA', true, false);
+            updateBadge('filterPriceAction', true, false);
+            updateBadge('filterRanking', true, false);
+        }
+    }
+
     // Update Progress
     async function updateProgress() {
         try {
@@ -474,6 +559,17 @@
                 // Update progress text
                 document.getElementById('progressText').textContent =
                     `Scanning ${status.scanned_stocks} of ${status.total_stocks} stocks`;
+
+                // Update detailed progress message
+                if (status.progress_message) {
+                    document.getElementById('progressMessageAlert').style.display = 'block';
+                    document.getElementById('progressMessage').textContent = status.progress_message;
+
+                    // Update filter stage indicators based on progress message
+                    updateFilterStages(status.progress_message);
+                } else {
+                    document.getElementById('progressMessageAlert').style.display = 'none';
+                }
 
                 // Check if completed
                 if (status.status === 'completed' || status.status === 'failed' || status.status === 'cancelled') {
