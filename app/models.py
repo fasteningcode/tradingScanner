@@ -1406,6 +1406,530 @@ class VolumeDryUpTask(db.Model):
         }
 
 
+class AlignedBreakoutProfile(db.Model):
+    """Configuration for Aligned Breakout Strategy scanner profiles"""
+
+    __tablename__ = 'aligned_breakout_profiles'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True, index=True)
+    description = db.Column(db.Text, nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
+
+    # Sector Alignment Criteria
+    sector_stage = db.Column(db.Integer, default=2)  # Required sector stage
+    sector_max_weeks_in_stage = db.Column(db.Integer, default=24)  # < 6 months = 24 weeks
+    sector_rs_min = db.Column(db.Float, default=60.0)  # Sector RS vs Nifty 50 > 60
+    subsector_rs_min = db.Column(db.Float, default=60.0)  # SubSector RS vs Nifty 50 > 60
+
+    # Stock Stage Criteria
+    stock_stage = db.Column(db.Integer, default=2)  # Required stock stage
+    stock_max_weeks_in_stage = db.Column(db.Integer, default=4)  # Early Stage 2 < 4 weeks
+    price_above_150ma = db.Column(db.Boolean, default=True)  # Price must be > 150-day MA
+    ma_150_slope_min = db.Column(db.Float, default=0.0)  # 150-day MA trending up (slope > 0)
+    distance_from_52w_high_min = db.Column(db.Float, default=10.0)  # 10% from 52-week high
+    distance_from_52w_high_max = db.Column(db.Float, default=30.0)  # 30% from 52-week high
+
+    # Volume Confirmation Criteria
+    breakout_volume_min_pct = db.Column(db.Float, default=150.0)  # Breakout volume > 150% of 50-day avg
+    accumulation_days = db.Column(db.Integer, default=3)  # Volume increasing for 3 days
+
+    # Relative Strength Criteria
+    stock_rs_vs_sector_min = db.Column(db.Float, default=70.0)  # Stock RS vs Sector > 70
+    stock_rs_vs_subsector_min = db.Column(db.Float, default=70.0)  # Stock RS vs SubSector > 70
+    stock_rs_vs_nifty50_min = db.Column(db.Float, default=65.0)  # Stock RS vs Nifty 50 > 65
+    rs_trend_weeks = db.Column(db.Integer, default=4)  # RS trend over 4 weeks
+    rs_trend_direction = db.Column(db.String(20), default='improving')  # 'improving', 'stable', 'any'
+
+    # Scoring Weights (optional)
+    weight_sector_alignment = db.Column(db.Float, default=25.0)
+    weight_stock_stage = db.Column(db.Float, default=25.0)
+    weight_volume = db.Column(db.Float, default=25.0)
+    weight_rs = db.Column(db.Float, default=25.0)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    scan_results = db.relationship('AlignedBreakoutScanResult', back_populates='profile', cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<AlignedBreakoutProfile {self.name}>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'is_active': self.is_active,
+            'sector_stage': self.sector_stage,
+            'sector_max_weeks_in_stage': self.sector_max_weeks_in_stage,
+            'sector_rs_min': self.sector_rs_min,
+            'subsector_rs_min': self.subsector_rs_min,
+            'stock_stage': self.stock_stage,
+            'stock_max_weeks_in_stage': self.stock_max_weeks_in_stage,
+            'price_above_150ma': self.price_above_150ma,
+            'ma_150_slope_min': self.ma_150_slope_min,
+            'distance_from_52w_high_min': self.distance_from_52w_high_min,
+            'distance_from_52w_high_max': self.distance_from_52w_high_max,
+            'breakout_volume_min_pct': self.breakout_volume_min_pct,
+            'accumulation_days': self.accumulation_days,
+            'stock_rs_vs_sector_min': self.stock_rs_vs_sector_min,
+            'stock_rs_vs_subsector_min': self.stock_rs_vs_subsector_min,
+            'stock_rs_vs_nifty50_min': self.stock_rs_vs_nifty50_min,
+            'rs_trend_weeks': self.rs_trend_weeks,
+            'rs_trend_direction': self.rs_trend_direction,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+class AlignedBreakoutScanResult(db.Model):
+    """Historical scan execution results for Aligned Breakout Strategy"""
+
+    __tablename__ = 'aligned_breakout_scan_results'
+
+    id = db.Column(db.Integer, primary_key=True)
+    profile_id = db.Column(db.Integer, db.ForeignKey('aligned_breakout_profiles.id'), nullable=False, index=True)
+
+    # Scan execution tracking
+    status = db.Column(db.String(20), default='pending', nullable=False, index=True)  # 'pending', 'running', 'completed', 'failed'
+    total_stocks_scanned = db.Column(db.Integer, default=0)
+    matched_stocks = db.Column(db.Integer, default=0)
+
+    # Timestamps
+    started_at = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    # Error handling
+    error_message = db.Column(db.Text, nullable=True)
+
+    # Relationships
+    profile = db.relationship('AlignedBreakoutProfile', back_populates='scan_results')
+
+    def __repr__(self):
+        return f'<AlignedBreakoutScanResult Profile:{self.profile_id} Matched:{self.matched_stocks}>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'profile_id': self.profile_id,
+            'status': self.status,
+            'total_stocks_scanned': self.total_stocks_scanned,
+            'matched_stocks': self.matched_stocks,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'error_message': self.error_message
+        }
+
+
+class AlignedBreakoutStockMetrics(db.Model):
+    """Extended stock metrics for Aligned Breakout Strategy"""
+
+    __tablename__ = 'aligned_breakout_stock_metrics'
+
+    id = db.Column(db.Integer, primary_key=True)
+    instrument_id = db.Column(db.Integer, db.ForeignKey('instruments.id'), nullable=False, unique=True, index=True)
+
+    # 52-week tracking
+    week_52_high = db.Column(db.Float, nullable=True)
+    week_52_low = db.Column(db.Float, nullable=True)
+    week_52_high_date = db.Column(db.Date, nullable=True)
+    week_52_low_date = db.Column(db.Date, nullable=True)
+    distance_from_52w_high_pct = db.Column(db.Float, nullable=True, index=True)  # % below 52-week high
+
+    # Moving Average values and slopes
+    ma_150_value = db.Column(db.Float, nullable=True)
+    ma_150_slope = db.Column(db.Float, nullable=True, index=True)  # Slope of 150-day MA (positive = trending up)
+
+    # RS vs Nifty 50
+    rs_vs_nifty50 = db.Column(db.Float, nullable=True, index=True)
+    rs_vs_nifty50_trend = db.Column(db.String(20), nullable=True)  # 'improving', 'stable', 'declining'
+
+    # Time in stage tracking
+    current_stage = db.Column(db.Integer, nullable=True, index=True)
+    stage_entry_date = db.Column(db.Date, nullable=True)
+    weeks_in_stage = db.Column(db.Integer, nullable=True, index=True)
+
+    # Volume metrics
+    avg_volume_50d = db.Column(db.BigInteger, nullable=True)
+    last_volume = db.Column(db.BigInteger, nullable=True)
+    volume_breakout_detected = db.Column(db.Boolean, default=False, index=True)
+    accumulation_pattern_days = db.Column(db.Integer, default=0)  # Consecutive days of volume increase
+
+    # Last update
+    calculated_at = db.Column(db.DateTime, nullable=True, index=True)
+
+    # Relationships
+    instrument = db.relationship('Instrument', backref=db.backref('aligned_breakout_metrics', uselist=False))
+
+    def __repr__(self):
+        return f'<AlignedBreakoutStockMetrics {self.instrument_id} Stage:{self.current_stage}>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'instrument_id': self.instrument_id,
+            'week_52_high': self.week_52_high,
+            'week_52_low': self.week_52_low,
+            'distance_from_52w_high_pct': self.distance_from_52w_high_pct,
+            'ma_150_value': self.ma_150_value,
+            'ma_150_slope': self.ma_150_slope,
+            'rs_vs_nifty50': self.rs_vs_nifty50,
+            'rs_vs_nifty50_trend': self.rs_vs_nifty50_trend,
+            'current_stage': self.current_stage,
+            'weeks_in_stage': self.weeks_in_stage,
+            'volume_breakout_detected': self.volume_breakout_detected,
+            'accumulation_pattern_days': self.accumulation_pattern_days,
+            'calculated_at': self.calculated_at.isoformat() if self.calculated_at else None
+        }
+
+
+class AlignedBreakoutSectorMetrics(db.Model):
+    """Sector/SubSector metrics for Aligned Breakout Strategy"""
+
+    __tablename__ = 'aligned_breakout_sector_metrics'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Entity type and reference
+    entity_type = db.Column(db.String(20), nullable=False, index=True)  # 'sector' or 'subsector'
+    sector_id = db.Column(db.Integer, db.ForeignKey('sectors.id'), nullable=True, index=True)
+    subsector_id = db.Column(db.Integer, db.ForeignKey('sub_sectors.id'), nullable=True, index=True)
+
+    # RS vs Nifty 50
+    rs_vs_nifty50 = db.Column(db.Float, nullable=True, index=True)
+    rs_vs_nifty50_trend = db.Column(db.String(20), nullable=True)  # 'improving', 'stable', 'declining'
+
+    # Stage tracking
+    current_stage = db.Column(db.Integer, nullable=True, index=True)
+    stage_entry_date = db.Column(db.Date, nullable=True)
+    weeks_in_stage = db.Column(db.Integer, nullable=True, index=True)
+
+    # Last update
+    calculated_at = db.Column(db.DateTime, nullable=True, index=True)
+
+    # Relationships
+    sector = db.relationship('Sector', foreign_keys=[sector_id], backref=db.backref('aligned_breakout_metrics', lazy='dynamic'))
+    subsector = db.relationship('SubSector', foreign_keys=[subsector_id], backref=db.backref('aligned_breakout_metrics', lazy='dynamic'))
+
+    # Unique constraint
+    __table_args__ = (
+        db.UniqueConstraint('entity_type', 'sector_id', 'subsector_id', name='uq_entity_sector_subsector'),
+        db.Index('idx_entity_lookup', 'entity_type', 'sector_id', 'subsector_id'),
+    )
+
+    def __repr__(self):
+        if self.entity_type == 'sector':
+            return f'<AlignedBreakoutSectorMetrics Sector:{self.sector_id} Stage:{self.current_stage}>'
+        else:
+            return f'<AlignedBreakoutSectorMetrics SubSector:{self.subsector_id} Stage:{self.current_stage}>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'entity_type': self.entity_type,
+            'sector_id': self.sector_id,
+            'subsector_id': self.subsector_id,
+            'rs_vs_nifty50': self.rs_vs_nifty50,
+            'rs_vs_nifty50_trend': self.rs_vs_nifty50_trend,
+            'current_stage': self.current_stage,
+            'weeks_in_stage': self.weeks_in_stage,
+            'calculated_at': self.calculated_at.isoformat() if self.calculated_at else None
+        }
+
+
+class AlignedBreakoutWatchlist(db.Model):
+    """Denormalized watchlist for fast querying of matched stocks"""
+
+    __tablename__ = 'aligned_breakout_watchlist'
+
+    id = db.Column(db.Integer, primary_key=True)
+    scan_result_id = db.Column(db.Integer, db.ForeignKey('aligned_breakout_scan_results.id'), nullable=False, index=True)
+    instrument_id = db.Column(db.Integer, db.ForeignKey('instruments.id'), nullable=False, index=True)
+
+    # Denormalized stock info for fast access
+    tradingsymbol = db.Column(db.String(50), nullable=False, index=True)
+    sector_name = db.Column(db.String(100), nullable=True)
+    subsector_name = db.Column(db.String(100), nullable=True)
+
+    # Criteria scores (0-100 for each category)
+    score_sector_alignment = db.Column(db.Float, default=0.0)
+    score_stock_stage = db.Column(db.Float, default=0.0)
+    score_volume = db.Column(db.Float, default=0.0)
+    score_rs = db.Column(db.Float, default=0.0)
+    score_total = db.Column(db.Float, default=0.0, index=True)  # Weighted total score
+
+    # Snapshot of key metrics at scan time
+    current_price = db.Column(db.Float, nullable=True)
+    distance_from_52w_high_pct = db.Column(db.Float, nullable=True)
+    rs_vs_nifty50 = db.Column(db.Float, nullable=True)
+    rs_vs_sector = db.Column(db.Float, nullable=True)
+    rs_vs_subsector = db.Column(db.Float, nullable=True)
+    volume_ratio_pct = db.Column(db.Float, nullable=True)
+
+    # Pass/Fail flags for each criteria
+    passed_sector_stage = db.Column(db.Boolean, default=False)
+    passed_sector_rs = db.Column(db.Boolean, default=False)
+    passed_stock_stage = db.Column(db.Boolean, default=False)
+    passed_volume = db.Column(db.Boolean, default=False)
+    passed_rs = db.Column(db.Boolean, default=False)
+
+    # Timestamps
+    added_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    # Relationships
+    scan_result = db.relationship('AlignedBreakoutScanResult', backref=db.backref('watchlist', lazy='dynamic'))
+    instrument = db.relationship('Instrument')
+
+    # Unique constraint
+    __table_args__ = (
+        db.UniqueConstraint('scan_result_id', 'instrument_id', name='uq_scan_instrument'),
+        db.Index('idx_watchlist_score', 'scan_result_id', 'score_total'),
+    )
+
+    def __repr__(self):
+        return f'<AlignedBreakoutWatchlist {self.tradingsymbol} Score:{self.score_total:.2f}>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'tradingsymbol': self.tradingsymbol,
+            'sector_name': self.sector_name,
+            'subsector_name': self.subsector_name,
+            'score_total': self.score_total,
+            'score_sector_alignment': self.score_sector_alignment,
+            'score_stock_stage': self.score_stock_stage,
+            'score_volume': self.score_volume,
+            'score_rs': self.score_rs,
+            'current_price': self.current_price,
+            'distance_from_52w_high_pct': self.distance_from_52w_high_pct,
+            'rs_vs_nifty50': self.rs_vs_nifty50,
+            'rs_vs_sector': self.rs_vs_sector,
+            'rs_vs_subsector': self.rs_vs_subsector,
+            'volume_ratio_pct': self.volume_ratio_pct,
+            'passed_sector_stage': self.passed_sector_stage,
+            'passed_sector_rs': self.passed_sector_rs,
+            'passed_stock_stage': self.passed_stock_stage,
+            'passed_volume': self.passed_volume,
+            'passed_rs': self.passed_rs
+        }
+
+
+class AlignedBreakoutStageTransition(db.Model):
+    """Track when stocks/sectors/subsectors enter each stage"""
+
+    __tablename__ = 'aligned_breakout_stage_transitions'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Entity type and reference
+    entity_type = db.Column(db.String(20), nullable=False, index=True)  # 'stock', 'sector', 'subsector'
+    instrument_id = db.Column(db.Integer, db.ForeignKey('instruments.id'), nullable=True, index=True)
+    sector_id = db.Column(db.Integer, db.ForeignKey('sectors.id'), nullable=True, index=True)
+    subsector_id = db.Column(db.Integer, db.ForeignKey('sub_sectors.id'), nullable=True, index=True)
+
+    # Stage transition details
+    from_stage = db.Column(db.Integer, nullable=True)  # Previous stage (null if first entry)
+    to_stage = db.Column(db.Integer, nullable=False, index=True)  # New stage
+    transition_date = db.Column(db.Date, nullable=False, index=True)
+
+    # Confidence and price at transition
+    stage_confidence = db.Column(db.Float, nullable=True)
+    price_at_transition = db.Column(db.Float, nullable=True)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationships
+    instrument = db.relationship('Instrument', foreign_keys=[instrument_id])
+    sector = db.relationship('Sector', foreign_keys=[sector_id])
+    subsector = db.relationship('SubSector', foreign_keys=[subsector_id])
+
+    # Indexes
+    __table_args__ = (
+        db.Index('idx_transition_lookup', 'entity_type', 'instrument_id', 'sector_id', 'subsector_id', 'transition_date'),
+    )
+
+    def __repr__(self):
+        return f'<AlignedBreakoutStageTransition {self.entity_type} Stage:{self.from_stage}->{self.to_stage}>'
+
+
+class AlignedBreakoutRSHistory(db.Model):
+    """Daily RS snapshots for trend detection"""
+
+    __tablename__ = 'aligned_breakout_rs_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Entity type and reference
+    entity_type = db.Column(db.String(20), nullable=False, index=True)  # 'stock', 'sector', 'subsector'
+    instrument_id = db.Column(db.Integer, db.ForeignKey('instruments.id'), nullable=True, index=True)
+    sector_id = db.Column(db.Integer, db.ForeignKey('sectors.id'), nullable=True, index=True)
+    subsector_id = db.Column(db.Integer, db.ForeignKey('sub_sectors.id'), nullable=True, index=True)
+
+    # RS values
+    rs_vs_nifty50 = db.Column(db.Float, nullable=True)
+    rs_vs_sector = db.Column(db.Float, nullable=True)  # Only for stocks
+    rs_vs_subsector = db.Column(db.Float, nullable=True)  # Only for stocks
+
+    # Date snapshot
+    calculated_date = db.Column(db.Date, nullable=False, index=True)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationships
+    instrument = db.relationship('Instrument', foreign_keys=[instrument_id])
+    sector = db.relationship('Sector', foreign_keys=[sector_id])
+    subsector = db.relationship('SubSector', foreign_keys=[subsector_id])
+
+    # Unique constraint
+    __table_args__ = (
+        db.UniqueConstraint('entity_type', 'instrument_id', 'sector_id', 'subsector_id', 'calculated_date',
+                          name='uq_rs_entity_date'),
+        db.Index('idx_rs_lookup', 'entity_type', 'instrument_id', 'sector_id', 'subsector_id', 'calculated_date'),
+    )
+
+    def __repr__(self):
+        return f'<AlignedBreakoutRSHistory {self.entity_type} Date:{self.calculated_date}>'
+
+
+class AlignedBreakoutVolumeEvent(db.Model):
+    """Track volume breakout events"""
+
+    __tablename__ = 'aligned_breakout_volume_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    instrument_id = db.Column(db.Integer, db.ForeignKey('instruments.id'), nullable=False, index=True)
+
+    # Event details
+    event_date = db.Column(db.Date, nullable=False, index=True)
+    event_type = db.Column(db.String(20), nullable=False)  # 'breakout', 'accumulation'
+    volume = db.Column(db.BigInteger, nullable=True)
+    volume_ratio_pct = db.Column(db.Float, nullable=True)  # Volume as % of 50-day avg
+    price_at_event = db.Column(db.Float, nullable=True)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationships
+    instrument = db.relationship('Instrument')
+
+    # Indexes
+    __table_args__ = (
+        db.Index('idx_volume_event_lookup', 'instrument_id', 'event_date', 'event_type'),
+    )
+
+    def __repr__(self):
+        return f'<AlignedBreakoutVolumeEvent {self.instrument_id} Type:{self.event_type} Date:{self.event_date}>'
+
+
+class AlignedBreakout52WeekTracking(db.Model):
+    """Track 52-week high/low changes"""
+
+    __tablename__ = 'aligned_breakout_52week_tracking'
+
+    id = db.Column(db.Integer, primary_key=True)
+    instrument_id = db.Column(db.Integer, db.ForeignKey('instruments.id'), nullable=False, index=True)
+
+    # 52-week data
+    week_52_high = db.Column(db.Float, nullable=True)
+    week_52_low = db.Column(db.Float, nullable=True)
+    week_52_high_date = db.Column(db.Date, nullable=True)
+    week_52_low_date = db.Column(db.Date, nullable=True)
+
+    # Snapshot date
+    snapshot_date = db.Column(db.Date, nullable=False, index=True)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationships
+    instrument = db.relationship('Instrument')
+
+    # Unique constraint
+    __table_args__ = (
+        db.UniqueConstraint('instrument_id', 'snapshot_date', name='uq_52week_instrument_date'),
+        db.Index('idx_52week_lookup', 'instrument_id', 'snapshot_date'),
+    )
+
+    def __repr__(self):
+        return f'<AlignedBreakout52WeekTracking {self.instrument_id} Date:{self.snapshot_date}>'
+
+
+class AlignedBreakoutMACalculation(db.Model):
+    """Daily MA values and slopes"""
+
+    __tablename__ = 'aligned_breakout_ma_calculations'
+
+    id = db.Column(db.Integer, primary_key=True)
+    instrument_id = db.Column(db.Integer, db.ForeignKey('instruments.id'), nullable=False, index=True)
+
+    # MA values
+    ma_150_value = db.Column(db.Float, nullable=True)
+    ma_150_slope = db.Column(db.Float, nullable=True)  # Slope (positive = trending up)
+
+    # Snapshot date
+    calculated_date = db.Column(db.Date, nullable=False, index=True)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationships
+    instrument = db.relationship('Instrument')
+
+    # Unique constraint
+    __table_args__ = (
+        db.UniqueConstraint('instrument_id', 'calculated_date', name='uq_ma_instrument_date'),
+        db.Index('idx_ma_lookup', 'instrument_id', 'calculated_date'),
+    )
+
+    def __repr__(self):
+        return f'<AlignedBreakoutMACalculation {self.instrument_id} Date:{self.calculated_date}>'
+
+
+class AlignedBreakoutScanSnapshot(db.Model):
+    """Point-in-time scan result snapshots"""
+
+    __tablename__ = 'aligned_breakout_scan_snapshots'
+
+    id = db.Column(db.Integer, primary_key=True)
+    scan_result_id = db.Column(db.Integer, db.ForeignKey('aligned_breakout_scan_results.id'), nullable=False, index=True)
+
+    # Snapshot data (stored as JSON)
+    snapshot_data = db.Column(db.Text, nullable=True)  # JSON string with full scan state
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    # Relationships
+    scan_result = db.relationship('AlignedBreakoutScanResult', backref=db.backref('snapshots', lazy='dynamic'))
+
+    def __repr__(self):
+        return f'<AlignedBreakoutScanSnapshot ScanResult:{self.scan_result_id}>'
+
+    def get_snapshot_data(self):
+        """Parse and return snapshot data as Python dict"""
+        import json
+        try:
+            return json.loads(self.snapshot_data) if self.snapshot_data else {}
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
+    def set_snapshot_data(self, data_dict):
+        """Set snapshot data from Python dict (converts to JSON)"""
+        import json
+        self.snapshot_data = json.dumps(data_dict)
+
+
 @login_manager.user_loader
 def load_user(user_id):
     """Load user by ID for Flask-Login"""

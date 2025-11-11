@@ -57,6 +57,7 @@ def create_app(config_name='default'):
     from app.orders import orders_bp
     from app.positions import positions_bp
     from app.backtest import backtest_bp
+    from app.routes.aligned_breakout_api import aligned_breakout_api
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -70,6 +71,7 @@ def create_app(config_name='default'):
     app.register_blueprint(orders_bp)
     app.register_blueprint(positions_bp)
     app.register_blueprint(backtest_bp)
+    app.register_blueprint(aligned_breakout_api)
 
     # Create database tables
     with app.app_context():
