@@ -2,7 +2,7 @@
 Scanner Service
 
 This service handles stock scanner execution and profile management.
-Scanning logic will be implemented later based on user requirements.
+Includes complete filter chain execution with detailed progress tracking.
 """
 
 import threading
@@ -11,7 +11,7 @@ from typing import Optional, Dict, List
 from datetime import datetime
 from flask import current_app
 from app import db
-from app.models import ScannerProfile, ScannerTask, Instrument, SubSector, HistoricalData
+from app.models import ScannerProfile, ScannerTask, ScanResultStock, Instrument, SubSector, HistoricalData
 
 # Dictionary to track running scanner tasks
 _running_tasks = {}

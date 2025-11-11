@@ -1295,6 +1295,7 @@ class ScannerTask(db.Model):
     # Progress tracking
     status = db.Column(db.String(20), default='pending', nullable=False, index=True)  # 'pending', 'running', 'completed', 'failed', 'cancelled'
     progress_percentage = db.Column(db.Float, default=0.0)
+    progress_message = db.Column(db.Text, nullable=True)  # Current status message for UI display
     total_stocks = db.Column(db.Integer, default=0)
     scanned_stocks = db.Column(db.Integer, default=0)
     matched_stocks = db.Column(db.Integer, default=0)  # Stocks that passed the criteria
@@ -1331,6 +1332,7 @@ class ScannerTask(db.Model):
             'profile_id': self.profile_id,
             'status': self.status,
             'progress_percentage': round(self.progress_percentage, 2),
+            'progress_message': self.progress_message,
             'total_stocks': self.total_stocks,
             'scanned_stocks': self.scanned_stocks,
             'matched_stocks': self.matched_stocks,
@@ -1340,6 +1342,81 @@ class ScannerTask(db.Model):
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
             'error_message': self.error_message,
             'eta_seconds': eta_seconds
+        }
+
+
+class ScanResultStock(db.Model):
+    """Model for storing individual stock results from scanner execution"""
+
+    __tablename__ = 'scan_result_stocks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey('scanner_tasks.id'), nullable=False, index=True)
+    instrument_id = db.Column(db.Integer, db.ForeignKey('instruments.id'), nullable=False, index=True)
+    tradingsymbol = db.Column(db.String(50), nullable=False, index=True)
+
+    # Current metrics at scan time
+    current_price = db.Column(db.Float)
+    stage = db.Column(db.Integer)
+    sector_name = db.Column(db.String(100))
+    subsector_name = db.Column(db.String(100))
+
+    # RS metrics
+    rs_vs_subsector = db.Column(db.Float)
+    rs_vs_sector = db.Column(db.Float)
+
+    # Volume metrics
+    volume_dryup_status = db.Column(db.String(50))
+    volume_dryup_classification = db.Column(db.String(50))
+    volume_ratio_pct = db.Column(db.Float)
+
+    # Moving averages (JSON array of MAs stock is above)
+    ma_above = db.Column(db.Text)  # e.g., '["SMA_50", "EMA_20"]'
+
+    # Price action pattern
+    price_action_pattern = db.Column(db.String(50))  # 'breakout', 'pullback', or null
+
+    # Scan ranking (for sorting)
+    scan_rank = db.Column(db.Integer, index=True)
+    scan_score = db.Column(db.Float)  # Calculated score used for ranking
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    # Relationships
+    task = db.relationship('ScannerTask', backref=db.backref('stock_results', lazy='dynamic', cascade='all, delete-orphan'))
+    instrument = db.relationship('Instrument')
+
+    def __repr__(self):
+        return f'<ScanResultStock {self.id} Task:{self.task_id} Symbol:{self.tradingsymbol} Rank:{self.scan_rank}>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        import json
+        ma_list = []
+        if self.ma_above:
+            try:
+                ma_list = json.loads(self.ma_above)
+            except:
+                ma_list = []
+
+        return {
+            'id': self.id,
+            'task_id': self.task_id,
+            'tradingsymbol': self.tradingsymbol,
+            'current_price': self.current_price,
+            'stage': self.stage,
+            'sector_name': self.sector_name,
+            'subsector_name': self.subsector_name,
+            'rs_vs_subsector': round(self.rs_vs_subsector, 2) if self.rs_vs_subsector else None,
+            'rs_vs_sector': round(self.rs_vs_sector, 2) if self.rs_vs_sector else None,
+            'volume_dryup_status': self.volume_dryup_status,
+            'volume_dryup_classification': self.volume_dryup_classification,
+            'volume_ratio_pct': round(self.volume_ratio_pct, 2) if self.volume_ratio_pct else None,
+            'ma_above': ma_list,
+            'price_action_pattern': self.price_action_pattern,
+            'scan_rank': self.scan_rank,
+            'scan_score': round(self.scan_score, 2) if self.scan_score else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
 
