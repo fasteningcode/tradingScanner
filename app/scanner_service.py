@@ -326,27 +326,40 @@ class Scanner:
                     if current_price is None:
                         continue
 
-                    # Record which MAs price is above (for display)
-                    # Note: MA filtering was already applied in _get_stocks_to_scan() if enabled
-                    # So here we only record the MA values for display purposes, not for filtering
+                    # Apply MA Filter if enabled (Step 4 in pipeline)
                     ma_above = []
 
-                    # Record which selected MAs the price is above
-                    if selected_sma:
-                        for period in selected_sma:
-                            sma_value = calculate_sma(candles, period)
-                            if sma_value and current_price > sma_value:
-                                ma_above.append(f'SMA_{period}')
+                    if enable_ma_filter and (selected_sma or selected_ema):
+                        # Check if price is above ALL selected MAs
+                        price_above_all_mas = True
 
-                    if selected_ema:
-                        for period in selected_ema:
-                            ema_value = calculate_ema(candles, period)
-                            if ema_value and current_price > ema_value:
-                                ma_above.append(f'EMA_{period}')
+                        # Check SMAs
+                        if selected_sma:
+                            for period in selected_sma:
+                                sma_value = calculate_sma(candles, period)
+                                if sma_value is None or current_price <= sma_value:
+                                    price_above_all_mas = False
+                                    break
+                                else:
+                                    ma_above.append(f'SMA_{period}')
 
-                    # Also check common MAs for display (20, 50, 200) if not already checked
+                        # Check EMAs
+                        if price_above_all_mas and selected_ema:
+                            for period in selected_ema:
+                                ema_value = calculate_ema(candles, period)
+                                if ema_value is None or current_price <= ema_value:
+                                    price_above_all_mas = False
+                                    break
+                                else:
+                                    ma_above.append(f'EMA_{period}')
+
+                        # If stock doesn't pass MA filter, skip it
+                        if not price_above_all_mas:
+                            continue
+
+                    # Also record common MAs for display (20, 50, 200) if not already checked
                     for period in [20, 50, 200]:
-                        if period not in selected_sma:  # Don't duplicate
+                        if period not in (selected_sma or []):
                             sma_value = calculate_sma(candles, period)
                             if sma_value and current_price > sma_value:
                                 ma_above.append(f'SMA_{period}')
@@ -587,71 +600,9 @@ class Scanner:
             if selected_volume_classification:
                 query = query.filter(Instrument.volume_dryup_classification.isnot(None))
 
-        # Apply MA filter (only if MA filter is enabled)
-        if enable_ma_filter and (selected_sma or selected_ema):
-            current_app.logger.info(
-                f'Scanner task {self.task_id}: Applying MA filter - SMA: {selected_sma}, EMA: {selected_ema}'
-            )
-
-            # Get all stocks from current query
-            all_stocks = query.all()
-            passed_stock_ids = []
-
-            for stock in all_stocks:
-                # Get historical data for this stock
-                hist_data = HistoricalData.query.filter_by(
-                    tradingsymbol=stock.tradingsymbol,
-                    interval='day'
-                ).first()
-
-                if not hist_data:
-                    continue
-
-                # Parse candlestick data
-                candles = hist_data.get_candles()
-
-                if not candles or len(candles) < 2:
-                    continue
-
-                # Get current price (last close)
-                current_price = candles[-1].get('close')
-
-                if current_price is None:
-                    continue
-
-                # Check if price is above ALL selected MAs
-                price_above_all = True
-
-                # Check SMAs
-                for period in selected_sma:
-                    sma_value = calculate_sma(candles, period)
-                    if sma_value is None or current_price <= sma_value:
-                        price_above_all = False
-                        break
-
-                # Check EMAs (only if still passing)
-                if price_above_all:
-                    for period in selected_ema:
-                        ema_value = calculate_ema(candles, period)
-                        if ema_value is None or current_price <= ema_value:
-                            price_above_all = False
-                            break
-
-                if price_above_all:
-                    passed_stock_ids.append(stock.id)
-
-            # Filter query to only include passed stocks
-            if passed_stock_ids:
-                query = query.filter(Instrument.id.in_(passed_stock_ids))
-                current_app.logger.info(
-                    f'Scanner task {self.task_id}: MA filter passed {len(passed_stock_ids)} stocks'
-                )
-            else:
-                # No stocks passed - return empty query
-                query = query.filter(Instrument.id == -1)
-                current_app.logger.info(
-                    f'Scanner task {self.task_id}: MA filter passed 0 stocks'
-                )
+        # Note: MA filter is NOT applied here - it runs in the main loop (Step 4)
+        # This ensures proper sequential filter order:
+        # 1. Stage/Sector → 2. RS → 3. Volume → 4. MA → 5. Price Action
 
         stocks = query.all()
         current_app.logger.info(f'Scanner task {self.task_id}: Filtered to {len(stocks)} stocks')
