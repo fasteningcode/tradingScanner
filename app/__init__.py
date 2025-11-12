@@ -58,10 +58,12 @@ def create_app(config_name='default'):
     from app.positions import positions_bp
     from app.backtest import backtest_bp
     from app.routes.aligned_breakout_api import aligned_breakout_api
+    from app.api_routes import api_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(settings_bp)
+    app.register_blueprint(api_bp)
     app.register_blueprint(kite_bp)
     app.register_blueprint(stocks_bp)
     app.register_blueprint(watchlist_bp)

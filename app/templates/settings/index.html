@@ -106,6 +106,16 @@
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
+                        <button class="nav-link {{ 'active' if active_tab == 'master-sync' else '' }}"
+                                id="master-sync-tab"
+                                data-bs-toggle="tab"
+                                data-bs-target="#master-sync"
+                                type="button"
+                                role="tab">
+                            <i class="bi bi-arrow-repeat me-2"></i>Master Sync
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
                         <button class="nav-link {{ 'active' if active_tab == 'about' else '' }}"
                                 id="about-tab"
                                 data-bs-toggle="tab"
@@ -1760,6 +1770,234 @@
                                         <p class="small mb-0 mt-1">Volume <50%</p>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Master Sync Tab -->
+                    <div class="tab-pane fade {{ 'show active' if active_tab == 'master-sync' else '' }}"
+                         id="master-sync"
+                         role="tabpanel">
+                        <h4 class="mb-4">
+                            <i class="bi bi-arrow-repeat text-primary me-2"></i>Master Synchronization
+                        </h4>
+
+                        <!-- Hero Section -->
+                        <div class="card shadow-sm mb-4 border-primary">
+                            <div class="card-body text-center py-5">
+                                <i class="bi bi-arrow-repeat text-primary" style="font-size: 3rem;"></i>
+                                <h3 class="mt-3">Single-Click Data Synchronization</h3>
+                                <p class="text-muted mb-4">
+                                    Execute all data sync and analysis tasks in one click. This will run all 6 steps sequentially:<br>
+                                    Historical Data Sync → Generate Indices → Stage Analysis → Stock Stage Analysis → RS Calculation → Volume Dry-Up
+                                </p>
+
+                                <button id="startMasterSync" class="btn btn-primary btn-lg" onclick="startMasterSync()">
+                                    <i class="bi bi-play-circle me-2"></i>Start Synchronization
+                                </button>
+                                <button id="cancelMasterSync" class="btn btn-danger btn-lg ms-2" style="display: none;" onclick="cancelMasterSync()">
+                                    <i class="bi bi-x-circle me-2"></i>Cancel
+                                </button>
+                                <button id="navigateToScanner" class="btn btn-success btn-lg ms-2" style="display: none;" onclick="window.location.href='/scanner'">
+                                    <i class="bi bi-arrow-right-circle me-2"></i>Go to Scanner
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Overall Progress Section -->
+                        <div id="masterSyncProgress" style="display: none;">
+                            <div class="card shadow-sm mb-4">
+                                <div class="card-header bg-primary text-white">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-hourglass-split me-2"></i>Overall Progress
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row mb-3">
+                                        <div class="col-md-3">
+                                            <h6 class="text-muted">Status</h6>
+                                            <h5 id="overallStatus" class="mb-0">
+                                                <span class="badge bg-secondary">Pending</span>
+                                            </h5>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <h6 class="text-muted">Current Step</h6>
+                                            <h5 id="currentStepDisplay" class="mb-0">--</h5>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <h6 class="text-muted">Progress</h6>
+                                            <h5 id="progressPercentage" class="mb-0">0%</h5>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <h6 class="text-muted">Task ID</h6>
+                                            <h5 id="taskIdDisplay" class="mb-0">--</h5>
+                                        </div>
+                                    </div>
+                                    <div class="progress" style="height: 30px;">
+                                        <div id="overallProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                                             role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                            0%
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Error Display -->
+                            <div id="errorDisplay" class="alert alert-danger shadow-sm" style="display: none;" role="alert">
+                                <h5 class="alert-heading">
+                                    <i class="bi bi-exclamation-triangle-fill me-2"></i>Error Occurred
+                                </h5>
+                                <hr>
+                                <p id="errorMessage" class="mb-0"></p>
+                            </div>
+
+                            <!-- Step Progress Cards -->
+                            <div class="row">
+                                <!-- Step 1: Historical Data Sync -->
+                                <div class="col-md-6 mb-4">
+                                    <div class="card shadow-sm h-100" id="step1Card">
+                                        <div class="card-header bg-light">
+                                            <h6 class="mb-0">
+                                                <i class="bi bi-1-circle me-2"></i>Historical Data Sync
+                                            </h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-2">
+                                                <span id="step1Status" class="badge bg-secondary">Pending</span>
+                                            </div>
+                                            <div class="progress mb-2" style="height: 20px;">
+                                                <div id="step1Progress" class="progress-bar" role="progressbar" style="width: 0%;">0%</div>
+                                            </div>
+                                            <small id="step1Details" class="text-muted">Waiting to start...</small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 2: Generate Indices -->
+                                <div class="col-md-6 mb-4">
+                                    <div class="card shadow-sm h-100" id="step2Card">
+                                        <div class="card-header bg-light">
+                                            <h6 class="mb-0">
+                                                <i class="bi bi-2-circle me-2"></i>Generate Historical Indices
+                                            </h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-2">
+                                                <span id="step2Status" class="badge bg-secondary">Pending</span>
+                                            </div>
+                                            <div class="progress mb-2" style="height: 20px;">
+                                                <div id="step2Progress" class="progress-bar" role="progressbar" style="width: 0%;">0%</div>
+                                            </div>
+                                            <small id="step2Details" class="text-muted">Waiting to start...</small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 3: Stage Analysis -->
+                                <div class="col-md-6 mb-4">
+                                    <div class="card shadow-sm h-100" id="step3Card">
+                                        <div class="card-header bg-light">
+                                            <h6 class="mb-0">
+                                                <i class="bi bi-3-circle me-2"></i>Stage Analysis
+                                            </h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-2">
+                                                <span id="step3Status" class="badge bg-secondary">Pending</span>
+                                            </div>
+                                            <div class="progress mb-2" style="height: 20px;">
+                                                <div id="step3Progress" class="progress-bar" role="progressbar" style="width: 0%;">0%</div>
+                                            </div>
+                                            <small id="step3Details" class="text-muted">Waiting to start...</small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 4: Stock Stage Analysis -->
+                                <div class="col-md-6 mb-4">
+                                    <div class="card shadow-sm h-100" id="step4Card">
+                                        <div class="card-header bg-light">
+                                            <h6 class="mb-0">
+                                                <i class="bi bi-4-circle me-2"></i>Stock Stage Analysis
+                                            </h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-2">
+                                                <span id="step4Status" class="badge bg-secondary">Pending</span>
+                                            </div>
+                                            <div class="progress mb-2" style="height: 20px;">
+                                                <div id="step4Progress" class="progress-bar" role="progressbar" style="width: 0%;">0%</div>
+                                            </div>
+                                            <small id="step4Details" class="text-muted">Waiting to start...</small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 5: RS Calculation -->
+                                <div class="col-md-6 mb-4">
+                                    <div class="card shadow-sm h-100" id="step5Card">
+                                        <div class="card-header bg-light">
+                                            <h6 class="mb-0">
+                                                <i class="bi bi-5-circle me-2"></i>RS Calculation
+                                            </h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-2">
+                                                <span id="step5Status" class="badge bg-secondary">Pending</span>
+                                            </div>
+                                            <div class="progress mb-2" style="height: 20px;">
+                                                <div id="step5Progress" class="progress-bar" role="progressbar" style="width: 0%;">0%</div>
+                                            </div>
+                                            <small id="step5Details" class="text-muted">Waiting to start...</small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 7: Volume Dry-Up -->
+                                <div class="col-md-6 mb-4">
+                                    <div class="card shadow-sm h-100" id="step6Card">
+                                        <div class="card-header bg-light">
+                                            <h6 class="mb-0">
+                                                <i class="bi bi-6-circle me-2"></i>Volume Dry-Up Analysis
+                                            </h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-2">
+                                                <span id="step6Status" class="badge bg-secondary">Pending</span>
+                                            </div>
+                                            <div class="progress mb-2" style="height: 20px;">
+                                                <div id="step6Progress" class="progress-bar" role="progressbar" style="width: 0%;">0%</div>
+                                            </div>
+                                            <small id="step6Details" class="text-muted">Waiting to start...</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Info Section -->
+                        <div class="card shadow-sm mt-4">
+                            <div class="card-header bg-info text-white">
+                                <h6 class="mb-0">
+                                    <i class="bi bi-info-circle me-2"></i>About Master Synchronization
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <h6>What happens during synchronization?</h6>
+                                <ol class="mb-3">
+                                    <li><strong>Historical Data Sync:</strong> Auto-detects and downloads/syncs candlestick data from Kite</li>
+                                    <li><strong>Generate Indices:</strong> Calculates sector and subsector indices for historical data</li>
+                                    <li><strong>Stage Analysis:</strong> Runs Weinstein Stage Analysis on all sectors/subsectors</li>
+                                    <li><strong>Stock Stage Analysis:</strong> Analyzes individual stock stages</li>
+                                    <li><strong>RS Calculation:</strong> Calculates Relative Strength for all stocks</li>
+                                    <li><strong>Volume Dry-Up:</strong> Analyzes volume patterns for all stocks</li>
+                                </ol>
+
+                                <h6>Automated Execution (Cron):</h6>
+                                <p class="mb-0">
+                                    You can set up a cron job to run this synchronization automatically every day at 4 PM IST after market hours.
+                                    See the documentation for setup instructions.
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -4269,6 +4507,325 @@
         // Clear task ID
         volumeDryupTaskId = null;
     }
+
+    // ==========================================
+    // MASTER SYNC FUNCTIONALITY
+    // ==========================================
+
+    let masterSyncTaskId = null;
+    let masterSyncPollingInterval = null;
+
+    // Status badge configuration
+    const statusBadges = {
+        'pending': '<span class="badge bg-secondary">Pending</span>',
+        'running': '<span class="badge bg-primary">Running</span>',
+        'completed': '<span class="badge bg-success">Completed</span>',
+        'failed': '<span class="badge bg-danger">Failed</span>',
+        'cancelled': '<span class="badge bg-warning">Cancelled</span>'
+    };
+
+    // Step name mapping
+    const stepNames = {
+        1: 'Historical Data Sync',
+        2: 'Generate Indices',
+        3: 'Stage Analysis',
+        4: 'Stock Stage Analysis',
+        5: 'RS Calculation',
+        6: 'Volume Dry-Up'
+    };
+
+    function startMasterSync() {
+        fetch('/settings/master-sync/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                masterSyncTaskId = data.task_id;
+
+                // Show progress section
+                document.getElementById('masterSyncProgress').style.display = 'block';
+
+                // Update task ID display
+                document.getElementById('taskIdDisplay').textContent = '#' + masterSyncTaskId;
+
+                // Hide start button, show cancel button
+                document.getElementById('startMasterSync').style.display = 'none';
+                document.getElementById('cancelMasterSync').style.display = 'inline-block';
+                document.getElementById('navigateToScanner').style.display = 'none';
+
+                // Start polling for progress
+                startMasterSyncPolling();
+
+                // Show success message
+                showAlert('success', data.message);
+            } else {
+                // If error is "already running", load the existing task
+                if (data.error && data.error.includes('already running')) {
+                    showAlert('info', data.error + ' - Loading existing task...');
+                    // Load the running task status
+                    loadExistingRunningTask();
+                } else {
+                    showAlert('danger', data.error || 'Failed to start master synchronization');
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error starting master sync:', error);
+            showAlert('danger', 'Error starting master synchronization: ' + error.message);
+        });
+    }
+
+    function startMasterSyncPolling() {
+        // Poll every 3 seconds
+        masterSyncPollingInterval = setInterval(updateMasterSyncProgress, 3000);
+
+        // Also update immediately
+        updateMasterSyncProgress();
+    }
+
+    function updateMasterSyncProgress() {
+        if (!masterSyncTaskId) {
+            return;
+        }
+
+        fetch('/settings/master-sync/status')
+        .then(response => response.json())
+        .then(data => {
+            if (!data.task) {
+                return;
+            }
+
+            const task = data.task;
+
+            // Update overall status
+            document.getElementById('overallStatus').innerHTML = statusBadges[task.status] || statusBadges['pending'];
+
+            // Update current step
+            if (task.current_step_name) {
+                document.getElementById('currentStepDisplay').textContent = task.current_step_name;
+            }
+
+            // Update progress percentage
+            const progress = Math.round(task.progress_percentage || 0);
+            document.getElementById('progressPercentage').textContent = progress + '%';
+
+            const progressBar = document.getElementById('overallProgressBar');
+            progressBar.style.width = progress + '%';
+            progressBar.setAttribute('aria-valuenow', progress);
+            progressBar.textContent = progress + '%';
+
+            // Update step progress using subtask_statuses from API
+            const subtasks = task.subtask_statuses || {};
+            updateStepProgress(1, subtasks.download || subtasks.sync);
+            updateStepProgress(2, {status: task.step_details ? task.step_details['2'].status : 'pending', progress_percentage: task.step_details ? task.step_details['2'].progress : 0});
+            updateStepProgress(3, subtasks.stage_analysis);
+            updateStepProgress(4, subtasks.stock_stage);
+            updateStepProgress(5, subtasks.rs_calculation);
+            updateStepProgress(6, subtasks.volume_dryup);
+
+            // Show error if any
+            if (task.status === 'failed' && task.error_details) {
+                try {
+                    const errorDetails = JSON.parse(task.error_details);
+                    showErrorDisplay(errorDetails.error || task.error_details);
+                } catch (e) {
+                    showErrorDisplay(task.error_details);
+                }
+            } else {
+                hideErrorDisplay();
+            }
+
+            // Check if completed or failed
+            if (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled') {
+                clearInterval(masterSyncPollingInterval);
+                masterSyncPollingInterval = null;
+
+                // Show appropriate button
+                document.getElementById('cancelMasterSync').style.display = 'none';
+
+                if (task.status === 'completed') {
+                    document.getElementById('navigateToScanner').style.display = 'inline-block';
+                    document.getElementById('startMasterSync').style.display = 'inline-block';
+                } else {
+                    document.getElementById('startMasterSync').style.display = 'inline-block';
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching master sync progress:', error);
+        });
+    }
+
+    function updateStepProgress(stepNum, taskData) {
+        const statusSpan = document.getElementById('step' + stepNum + 'Status');
+        const progressBar = document.getElementById('step' + stepNum + 'Progress');
+        const detailsText = document.getElementById('step' + stepNum + 'Details');
+        const card = document.getElementById('step' + stepNum + 'Card');
+
+        if (!taskData) {
+            // Step not started yet
+            statusSpan.innerHTML = statusBadges['pending'];
+            progressBar.style.width = '0%';
+            progressBar.textContent = '0%';
+            detailsText.textContent = 'Waiting to start...';
+            card.classList.remove('border-primary', 'border-success', 'border-danger');
+            return;
+        }
+
+        // Update status badge
+        statusSpan.innerHTML = statusBadges[taskData.status] || statusBadges['pending'];
+
+        // Update progress bar
+        const progress = taskData.progress_percentage || 0;
+        progressBar.style.width = progress + '%';
+        progressBar.textContent = Math.round(progress) + '%';
+
+        // Update progress bar color based on status
+        progressBar.className = 'progress-bar';
+        if (taskData.status === 'completed') {
+            progressBar.classList.add('bg-success');
+        } else if (taskData.status === 'failed') {
+            progressBar.classList.add('bg-danger');
+        } else if (taskData.status === 'running') {
+            progressBar.classList.add('bg-primary', 'progress-bar-striped', 'progress-bar-animated');
+        } else {
+            progressBar.classList.add('bg-secondary');
+        }
+
+        // Update card border
+        card.classList.remove('border-primary', 'border-success', 'border-danger', 'border-warning');
+        if (taskData.status === 'running') {
+            card.classList.add('border-primary');
+        } else if (taskData.status === 'completed') {
+            card.classList.add('border-success');
+        } else if (taskData.status === 'failed') {
+            card.classList.add('border-danger');
+        }
+
+        // Update details text
+        if (taskData.status === 'completed') {
+            detailsText.textContent = 'Completed successfully';
+        } else if (taskData.status === 'failed') {
+            detailsText.textContent = taskData.error_message || 'Failed - check logs';
+        } else if (taskData.status === 'running') {
+            detailsText.textContent = 'Processing...';
+        } else {
+            detailsText.textContent = 'Waiting...';
+        }
+    }
+
+    function showErrorDisplay(errorMessage) {
+        const errorDisplay = document.getElementById('errorDisplay');
+        const errorMessageElem = document.getElementById('errorMessage');
+
+        errorMessageElem.textContent = errorMessage;
+        errorDisplay.style.display = 'block';
+    }
+
+    function hideErrorDisplay() {
+        document.getElementById('errorDisplay').style.display = 'none';
+    }
+
+    function cancelMasterSync() {
+        if (!masterSyncTaskId) {
+            return;
+        }
+
+        if (!confirm('Are you sure you want to cancel the master synchronization?')) {
+            return;
+        }
+
+        fetch('/settings/master-sync/cancel/' + masterSyncTaskId, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert('success', data.message);
+
+                // Stop polling
+                if (masterSyncPollingInterval) {
+                    clearInterval(masterSyncPollingInterval);
+                    masterSyncPollingInterval = null;
+                }
+
+                // Update UI
+                document.getElementById('cancelMasterSync').style.display = 'none';
+                document.getElementById('startMasterSync').style.display = 'inline-block';
+            } else {
+                showAlert('danger', data.error || 'Failed to cancel master synchronization');
+            }
+        })
+        .catch(error => {
+            console.error('Error cancelling master sync:', error);
+            showAlert('danger', 'Error cancelling master synchronization: ' + error.message);
+        });
+    }
+
+    function loadExistingRunningTask() {
+        // Fetch status to get the running task
+        fetch('/settings/master-sync/status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.task && data.task.status === 'running') {
+                masterSyncTaskId = data.task.id;
+
+                // Show progress section
+                document.getElementById('masterSyncProgress').style.display = 'block';
+
+                // Update task ID display
+                document.getElementById('taskIdDisplay').textContent = '#' + masterSyncTaskId;
+
+                // Hide start button, show cancel button
+                document.getElementById('startMasterSync').style.display = 'none';
+                document.getElementById('cancelMasterSync').style.display = 'inline-block';
+                document.getElementById('navigateToScanner').style.display = 'none';
+
+                // Start polling
+                startMasterSyncPolling();
+            }
+        })
+        .catch(error => {
+            console.error('Error loading existing task:', error);
+        });
+    }
+
+    // Auto-load status if there's a running task on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        // Check if there's an active master sync task
+        fetch('/settings/master-sync/status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.task && data.task.status === 'running') {
+                masterSyncTaskId = data.task.id;
+
+                // Show progress section
+                document.getElementById('masterSyncProgress').style.display = 'block';
+
+                // Update task ID display
+                document.getElementById('taskIdDisplay').textContent = '#' + masterSyncTaskId;
+
+                // Hide start button, show cancel button
+                document.getElementById('startMasterSync').style.display = 'none';
+                document.getElementById('cancelMasterSync').style.display = 'inline-block';
+
+                // Start polling
+                startMasterSyncPolling();
+            }
+        })
+        .catch(error => {
+            console.error('Error checking master sync status:', error);
+        });
+    });
 
 </script>
 {% endblock %}

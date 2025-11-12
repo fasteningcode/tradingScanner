@@ -1486,6 +1486,110 @@ class VolumeDryUpTask(db.Model):
         }
 
 
+class MasterSyncTask(db.Model):
+    """Model for tracking master synchronization tasks that orchestrate multiple analysis steps"""
+
+    __tablename__ = 'master_sync_tasks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+
+    # Progress tracking
+    status = db.Column(db.String(20), default='pending', nullable=False, index=True)  # 'pending', 'running', 'completed', 'failed', 'cancelled'
+    progress_percentage = db.Column(db.Float, default=0.0)
+    current_step = db.Column(db.Integer, default=0)  # 0-7 (0=not started, 1-7=step number)
+    current_step_name = db.Column(db.String(100), nullable=True)
+    total_steps = db.Column(db.Integer, default=7)
+
+    # Sub-task IDs (links to individual task tables)
+    download_task_id = db.Column(db.Integer, db.ForeignKey('download_tasks.id'), nullable=True)
+    sync_task_id = db.Column(db.Integer, db.ForeignKey('sync_tasks.id'), nullable=True)
+    marketcap_task_id = db.Column(db.Integer, db.ForeignKey('marketcap_fetch_tasks.id'), nullable=True)
+    stage_analysis_task_id = db.Column(db.Integer, db.ForeignKey('stage_analysis_tasks.id'), nullable=True)
+    stock_stage_task_id = db.Column(db.Integer, db.ForeignKey('stock_stage_analysis_tasks.id'), nullable=True)
+    rs_calculation_task_id = db.Column(db.Integer, db.ForeignKey('rs_calculation_tasks.id'), nullable=True)
+    volume_dryup_task_id = db.Column(db.Integer, db.ForeignKey('volume_dryup_tasks.id'), nullable=True)
+
+    # Step details (JSON) - stores status and progress of each step
+    step_details = db.Column(db.Text, nullable=True)  # JSON: {"1": {"status": "completed", "progress": 100}, ...}
+
+    # Timestamps
+    started_at = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Error handling
+    error_message = db.Column(db.Text, nullable=True)
+    error_details = db.Column(db.Text, nullable=True)  # JSON: {"step_3": "Index generation failed: ...", ...}
+
+    # Relationships
+    user = db.relationship('User', backref=db.backref('master_sync_tasks', lazy='dynamic', cascade='all, delete-orphan'))
+    download_task = db.relationship('DownloadTask', foreign_keys=[download_task_id], backref='master_sync_tasks')
+    sync_task = db.relationship('SyncTask', foreign_keys=[sync_task_id], backref='master_sync_tasks')
+    marketcap_task = db.relationship('MarketCapFetchTask', foreign_keys=[marketcap_task_id], backref='master_sync_tasks')
+    stage_analysis_task = db.relationship('StageAnalysisTask', foreign_keys=[stage_analysis_task_id], backref='master_sync_tasks')
+    stock_stage_task = db.relationship('StockStageAnalysisTask', foreign_keys=[stock_stage_task_id], backref='master_sync_tasks')
+    rs_calculation_task = db.relationship('RSCalculationTask', foreign_keys=[rs_calculation_task_id], backref='master_sync_tasks')
+    volume_dryup_task = db.relationship('VolumeDryUpTask', foreign_keys=[volume_dryup_task_id], backref='master_sync_tasks')
+
+    def __repr__(self):
+        return f'<MasterSyncTask {self.id} User:{self.user_id} Status:{self.status} Step:{self.current_step}/{self.total_steps}>'
+
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        import json
+
+        # Parse step_details and error_details if they exist
+        step_details_dict = {}
+        error_details_dict = {}
+
+        if self.step_details:
+            try:
+                step_details_dict = json.loads(self.step_details)
+            except:
+                pass
+
+        if self.error_details:
+            try:
+                error_details_dict = json.loads(self.error_details)
+            except:
+                pass
+
+        # Calculate ETA if running
+        eta_seconds = None
+        if self.status == 'running' and self.current_step > 0 and self.started_at:
+            elapsed = (datetime.utcnow() - self.started_at).total_seconds()
+            avg_time_per_step = elapsed / self.current_step
+            remaining_steps = self.total_steps - self.current_step
+            eta_seconds = int(avg_time_per_step * remaining_steps)
+
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'status': self.status,
+            'progress_percentage': round(self.progress_percentage, 2),
+            'current_step': self.current_step,
+            'current_step_name': self.current_step_name,
+            'total_steps': self.total_steps,
+            'step_details': step_details_dict,
+            'error_details': error_details_dict,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'error_message': self.error_message,
+            'eta_seconds': eta_seconds,
+            'subtask_ids': {
+                'download_task_id': self.download_task_id,
+                'sync_task_id': self.sync_task_id,
+                'marketcap_task_id': self.marketcap_task_id,
+                'stage_analysis_task_id': self.stage_analysis_task_id,
+                'stock_stage_task_id': self.stock_stage_task_id,
+                'rs_calculation_task_id': self.rs_calculation_task_id,
+                'volume_dryup_task_id': self.volume_dryup_task_id
+            }
+        }
+
+
 class AlignedBreakoutProfile(db.Model):
     """Configuration for Aligned Breakout Strategy scanner profiles"""
 

@@ -6,7 +6,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required, current_user, logout_user
 from werkzeug.utils import secure_filename
 from app import db
-from app.models import User, HistoricalDataSettings, HistoricalData, DownloadTask, DownloadLog, Instrument, StockInformation, MarketCapFetchTask, StockStageAnalysisTask, RSCalculationTask, VolumeDryUpTask
+from app.models import User, HistoricalDataSettings, HistoricalData, DownloadTask, DownloadLog, Instrument, StockInformation, MarketCapFetchTask, StockStageAnalysisTask, RSCalculationTask, VolumeDryUpTask, MasterSyncTask
 from app.forms import BackupForm, RestoreDatabaseForm, EmergencyRestoreForm, KiteCredentialsForm
 from app.kite_auth import get_kite_client
 from app import marketcap_service
@@ -2171,3 +2171,104 @@ def volume_dryup_results_view():
         current_app.logger.error(f'Error displaying volume dry-up results: {str(e)}', exc_info=True)
         flash(f'Error loading results: {str(e)}', 'error')
         return redirect(url_for('settings.index'))
+
+
+# ==================== MASTER SYNC ROUTES ====================
+
+@settings_bp.route('/master-sync/start', methods=['POST'])
+@login_required
+def start_master_sync():
+    """Start master synchronization task"""
+    try:
+        from app.master_sync_service import start_master_sync as start_sync_service
+        from flask import current_app as app
+
+        success, message, task_id = start_sync_service(current_user.id, app._get_current_object())
+
+        if success:
+            return jsonify({
+                'success': True,
+                'message': message,
+                'task_id': task_id
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': message
+            }), 400
+
+    except Exception as e:
+        current_app.logger.error(f'Error starting master sync: {str(e)}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/master-sync/status', methods=['GET'])
+@login_required
+def get_master_sync_status():
+    """Get master synchronization task status"""
+    try:
+        from app.master_sync_service import get_master_sync_status as get_status_service
+
+        status = get_status_service(current_user.id)
+
+        if status:
+            return jsonify({
+                'success': True,
+                'task': status
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'No master sync task found'
+            }), 404
+
+    except Exception as e:
+        current_app.logger.error(f'Error getting master sync status: {str(e)}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_bp.route('/master-sync/cancel/<int:task_id>', methods=['POST'])
+@login_required
+def cancel_master_sync(task_id):
+    """Cancel master synchronization task"""
+    try:
+        from app.master_sync_service import cancel_master_sync as cancel_service
+
+        # Verify task belongs to current user
+        task = MasterSyncTask.query.get_or_404(task_id)
+        if task.user_id != current_user.id:
+            return jsonify({
+                'success': False,
+                'error': 'Unauthorized'
+            }), 403
+
+        success, message = cancel_service(task_id)
+
+        if success:
+            return jsonify({
+                'success': True,
+                'message': message
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': message
+            }), 400
+
+    except Exception as e:
+        current_app.logger.error(f'Error cancelling master sync: {str(e)}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ==================== CRON ENDPOINT MOVED TO api_routes.py ====================
+# The cron endpoint has been moved to app/api_routes.py to avoid URL prefix conflicts
+# See /api/master-sync/cron in api_routes.py
