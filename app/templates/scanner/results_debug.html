@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+
+{% block title %}Debug View - {{ task.profile.name if task.profile else 'Unknown Profile' }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2>
+                    <i class="bi bi-bug me-2"></i>Scanner Debug View
+                </h2>
+                <a href="{{ url_for('scanner.view_task_results', task_id=task.id) }}" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Results
+                </a>
+            </div>
+
+            <!-- Task Summary -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-info-circle me-2"></i>Scan Task Summary
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <h6 class="text-muted">Task ID</h6>
+                            <p class="mb-0"><strong>#{{ task.id }}</strong></p>
+                        </div>
+                        <div class="col-md-3">
+                            <h6 class="text-muted">Profile Name</h6>
+                            <p class="mb-0"><strong>{{ profile.name if profile else 'Unknown' }}</strong></p>
+                        </div>
+                        <div class="col-md-3">
+                            <h6 class="text-muted">Initial Stocks</h6>
+                            <p class="mb-0"><strong>{{ debug_info.total_stocks_initial }}</strong></p>
+                        </div>
+                        <div class="col-md-3">
+                            <h6 class="text-muted">Final Matched</h6>
+                            <p class="mb-0"><strong class="text-success">{{ debug_info.final_matched }}</strong></p>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Started At</h6>
+                            <p class="mb-0">{{ task.started_at.strftime('%b %d, %Y %I:%M:%S %p') if task.started_at else '--' }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Completed At</h6>
+                            <p class="mb-0">{{ task.completed_at.strftime('%b %d, %Y %I:%M:%S %p') if task.completed_at else '--' }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Warning for old scans without snapshot -->
+            {% if debug_info.criteria_source == 'current' %}
+            <div class="alert alert-warning shadow-sm" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                <strong>Note:</strong> This scan was performed before criteria snapshots were implemented.
+                The debug information shown below uses the <strong>current profile criteria</strong>, which may have been
+                edited since this scan was run. The actual results may not match what this debug view suggests.
+            </div>
+            {% endif %}
+
+            <!-- Filter Pipeline -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-funnel me-2"></i>Filter Pipeline (Step-by-Step)
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 50px;">#</th>
+                                    <th style="width: 250px;">Filter Name</th>
+                                    <th style="width: 100px;">Status</th>
+                                    <th>Criteria</th>
+                                    <th style="width: 100px;">Passed</th>
+                                    <th style="width: 100px;">Failed</th>
+                                    <th style="width: 150px;">Pass Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Initial State -->
+                                <tr class="table-info">
+                                    <td><strong>0</strong></td>
+                                    <td><strong>Initial Stock Universe</strong></td>
+                                    <td>
+                                        <span class="badge bg-secondary">Start</span>
+                                    </td>
+                                    <td>NSE EQ + NIFTY 500 stocks</td>
+                                    <td><strong>{{ debug_info.total_stocks_initial }}</strong></td>
+                                    <td>--</td>
+                                    <td>--</td>
+                                </tr>
+
+                                {% for filter_info in debug_info.filters_applied %}
+                                <tr>
+                                    <td><strong>{{ loop.index }}</strong></td>
+                                    <td>{{ filter_info.name }}</td>
+                                    <td>
+                                        {% if filter_info.enabled %}
+                                        <span class="badge bg-success">Enabled</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Disabled</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">{{ filter_info.criteria }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="text-success fw-bold">{{ filter_info.passed }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="text-danger">{{ filter_info.failed }}</span>
+                                    </td>
+                                    <td>
+                                        {% set total = filter_info.passed + filter_info.failed %}
+                                        {% if total > 0 %}
+                                            {% set pass_rate = (filter_info.passed / total * 100) | round(1) %}
+                                            <div class="progress" style="height: 20px;">
+                                                <div class="progress-bar bg-success" role="progressbar" style="width: {{ pass_rate }}%;">
+                                                    {{ pass_rate }}%
+                                                </div>
+                                            </div>
+                                        {% else %}
+                                            --
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+
+                                <!-- Final State -->
+                                <tr class="table-success">
+                                    <td><strong><i class="bi bi-check-circle-fill"></i></strong></td>
+                                    <td><strong>Final Matched Stocks</strong></td>
+                                    <td>
+                                        <span class="badge bg-success">Completed</span>
+                                    </td>
+                                    <td>All filters passed</td>
+                                    <td><strong class="text-success">{{ debug_info.final_matched }}</strong></td>
+                                    <td>
+                                        <strong class="text-danger">{{ debug_info.total_stocks_initial - debug_info.final_matched }}</strong>
+                                    </td>
+                                    <td>
+                                        {% set final_pass_rate = (debug_info.final_matched / debug_info.total_stocks_initial * 100) | round(1) %}
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar bg-success" role="progressbar" style="width: {{ final_pass_rate }}%;">
+                                                {{ final_pass_rate }}%
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filter Funnel Visualization -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-diagram-3 me-2"></i>Filter Funnel Visualization
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center">
+                        <div class="mb-4">
+                            <h3 class="text-primary">{{ debug_info.total_stocks_initial }}</h3>
+                            <p class="text-muted">Initial Stocks</p>
+                            <i class="bi bi-arrow-down" style="font-size: 2rem; color: #ccc;"></i>
+                        </div>
+
+                        {% for filter_info in debug_info.filters_applied %}
+                        <div class="mb-4">
+                            <div class="alert alert-info d-inline-block" style="min-width: 300px;">
+                                <strong>{{ filter_info.name }}</strong><br>
+                                <small>{{ filter_info.criteria }}</small>
+                            </div>
+                            <div class="mt-2">
+                                <span class="badge bg-success" style="font-size: 1.2rem;">{{ filter_info.passed }} passed</span>
+                                <span class="badge bg-danger ms-2" style="font-size: 1.2rem;">{{ filter_info.failed }} eliminated</span>
+                            </div>
+                            {% if not loop.last %}
+                            <i class="bi bi-arrow-down mt-3" style="font-size: 2rem; color: #ccc;"></i>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+
+                        <div class="mt-4">
+                            <i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>
+                            <h3 class="text-success mt-2">{{ debug_info.final_matched }}</h3>
+                            <p class="text-muted">Final Matched Stocks</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filter Statistics -->
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="card shadow-sm">
+                        <div class="card-body text-center">
+                            <h6 class="text-muted">Elimination Rate</h6>
+                            <h2 class="text-danger">{{ ((debug_info.total_stocks_initial - debug_info.final_matched) / debug_info.total_stocks_initial * 100) | round(1) }}%</h2>
+                            <p class="text-muted mb-0">{{ debug_info.total_stocks_initial - debug_info.final_matched }} stocks eliminated</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card shadow-sm">
+                        <div class="card-body text-center">
+                            <h6 class="text-muted">Pass Rate</h6>
+                            <h2 class="text-success">{{ (debug_info.final_matched / debug_info.total_stocks_initial * 100) | round(1) }}%</h2>
+                            <p class="text-muted mb-0">{{ debug_info.final_matched }} stocks passed all filters</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card shadow-sm">
+                        <div class="card-body text-center">
+                            <h6 class="text-muted">Filters Applied</h6>
+                            <h2 class="text-primary">{{ debug_info.filters_applied | length }}</h2>
+                            <p class="text-muted mb-0">Active filter stages</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="row mt-4">
+                <div class="col-md-12 text-center">
+                    <a href="{{ url_for('scanner.view_task_results', task_id=task.id) }}" class="btn btn-primary btn-lg">
+                        <i class="bi bi-table me-2"></i>View Results Table
+                    </a>
+                    <a href="{{ url_for('scanner.edit_profile', profile_id=profile.id) }}" class="btn btn-secondary btn-lg ms-2">
+                        <i class="bi bi-pencil me-2"></i>Edit Profile
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1310,6 +1310,9 @@ class ScannerTask(db.Model):
     # Error handling
     error_message = db.Column(db.Text, nullable=True)
 
+    # Criteria snapshot (stores the exact criteria used for this scan)
+    criteria_snapshot = db.Column(db.Text, nullable=True)
+
     # Relationships
     user = db.relationship('User', backref=db.backref('scanner_tasks', lazy='dynamic', cascade='all, delete-orphan'))
     profile = db.relationship('ScannerProfile', back_populates='scan_tasks')

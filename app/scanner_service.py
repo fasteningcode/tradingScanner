@@ -102,11 +102,12 @@ def start_scan(user_id: int, profile_id: int, app=None) -> Optional[int]:
             current_app.logger.error(f'Profile {profile_id} not found for user {user_id}')
             return None
 
-        # Create task record
+        # Create task record with criteria snapshot
         task = ScannerTask(
             user_id=user_id,
             profile_id=profile_id,
-            status='pending'
+            status='pending',
+            criteria_snapshot=profile.criteria  # Store the exact criteria at scan time
         )
         db.session.add(task)
         db.session.commit()
@@ -292,22 +293,21 @@ class Scanner:
             db.session.commit()
 
             for idx, stock in enumerate(stocks):
-                # Check if task was cancelled
-                db.session.refresh(self.task)
-                if self.task.status == 'cancelled':
-                    current_app.logger.info(f'Scanner task {self.task_id} was cancelled')
-                    return
-
                 try:
-                    # Update progress
+                    # Check if task was cancelled
+                    db.session.refresh(self.task)
+                    if self.task.status == 'cancelled':
+                        current_app.logger.info(f'Scanner task {self.task_id} was cancelled')
+                        return
+
+                    # Update progress (after refresh, so values are fresh)
                     self.task.current_stock_symbol = stock.tradingsymbol
                     self.task.scanned_stocks += 1
                     self.task.progress_percentage = ((idx + 1) / len(stocks)) * 100
                     self.task.progress_message = f'Scanning: {stock.tradingsymbol} ({idx + 1} of {len(stocks)})'
 
-                    # Commit every 10 stocks to update UI
-                    if idx % 10 == 0:
-                        db.session.commit()
+                    # Commit progress updates immediately to persist counters and prevent loss on next refresh
+                    db.session.commit()
 
                     # Get historical data for MA and Price Action analysis
                     hist_data = HistoricalData.query.filter_by(
@@ -326,36 +326,27 @@ class Scanner:
                     if current_price is None:
                         continue
 
-                    # Apply MA Filter if enabled
+                    # Record which MAs price is above (for display)
+                    # Note: MA filtering was already applied in _get_stocks_to_scan() if enabled
+                    # So here we only record the MA values for display purposes, not for filtering
                     ma_above = []
-                    if enable_ma_filter and (selected_sma or selected_ema):
-                        passes_ma = True
 
-                        # Check SMAs
+                    # Record which selected MAs the price is above
+                    if selected_sma:
                         for period in selected_sma:
                             sma_value = calculate_sma(candles, period)
-                            if sma_value is None or current_price <= sma_value:
-                                passes_ma = False
-                                break
-                            else:
+                            if sma_value and current_price > sma_value:
                                 ma_above.append(f'SMA_{period}')
 
-                        # Check EMAs (only if still passing)
-                        if passes_ma:
-                            for period in selected_ema:
-                                ema_value = calculate_ema(candles, period)
-                                if ema_value is None or current_price <= ema_value:
-                                    passes_ma = False
-                                    break
-                                else:
-                                    ma_above.append(f'EMA_{period}')
+                    if selected_ema:
+                        for period in selected_ema:
+                            ema_value = calculate_ema(candles, period)
+                            if ema_value and current_price > ema_value:
+                                ma_above.append(f'EMA_{period}')
 
-                        if not passes_ma:
-                            continue  # Stock failed MA filter
-                    else:
-                        # MA filter not enabled, but still record which MAs price is above (for display)
-                        # Check common MAs: 20, 50, 200
-                        for period in [20, 50, 200]:
+                    # Also check common MAs for display (20, 50, 200) if not already checked
+                    for period in [20, 50, 200]:
+                        if period not in selected_sma:  # Don't duplicate
                             sma_value = calculate_sma(candles, period)
                             if sma_value and current_price > sma_value:
                                 ma_above.append(f'SMA_{period}')
@@ -381,6 +372,8 @@ class Scanner:
 
                     # Stock passed all filters - add to results
                     self.task.matched_stocks += 1
+                    # Commit immediately to persist matched_stocks count (prevents loss on refresh)
+                    db.session.commit()
 
                     # Calculate scan score for ranking
                     scan_score = self._calculate_scan_score(stock, criteria, ma_above, price_action_pattern)

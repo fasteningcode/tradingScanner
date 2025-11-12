@@ -607,8 +607,16 @@ def api_task_results(task_id):
         sort_by = request.args.get('sort_by', 'scan_rank')
         order = request.args.get('order', 'asc')
 
+        # Get matched_only filter (default True)
+        matched_only = request.args.get('matched_only', 'true').lower() == 'true'
+
         # Build query
         query = ScanResultStock.query.filter_by(task_id=task_id)
+
+        # Apply matched_only filter
+        if matched_only and task.matched_stocks:
+            # Only show stocks with rank <= matched_stocks count
+            query = query.filter(ScanResultStock.scan_rank <= task.matched_stocks)
 
         # Apply search filter
         if search:
@@ -699,10 +707,25 @@ def debug_task_results(task_id):
             flash('Scan task not found', 'error')
             return redirect(url_for('scanner.index', tab='results'))
 
-        # Get profile criteria
+        # Get profile criteria - use snapshot if available, otherwise use current profile
         profile = task.profile
         criteria = {}
-        if profile and profile.criteria:
+        criteria_source = "current"  # Track whether we're using snapshot or current
+
+        if task.criteria_snapshot:
+            # Use the criteria snapshot from when the scan was run
+            try:
+                criteria = json.loads(task.criteria_snapshot)
+                criteria_source = "snapshot"
+            except json.JSONDecodeError:
+                # Fallback to current profile criteria
+                if profile and profile.criteria:
+                    try:
+                        criteria = json.loads(profile.criteria)
+                    except json.JSONDecodeError:
+                        criteria = {}
+        elif profile and profile.criteria:
+            # No snapshot available, use current profile criteria
             try:
                 criteria = json.loads(profile.criteria)
             except json.JSONDecodeError:
@@ -714,7 +737,8 @@ def debug_task_results(task_id):
             'task_id': task_id,
             'profile_name': profile.name if profile else 'Unknown',
             'total_stocks_initial': 502,  # NIFTY 500 + some
-            'filters_applied': []
+            'filters_applied': [],
+            'criteria_source': criteria_source  # Pass this to template for warning
         }
 
         # Initial count
@@ -741,10 +765,29 @@ def debug_task_results(task_id):
             elif scan_level == 'subsector':
                 selected_ids = criteria.get('selected_subsectors', [])
 
-            # Apply filter (simplified - actual logic is in scanner_service)
+            # Actually apply the filter and count results
             if selected_ids:
-                # This is a simplified count - actual filtering is more complex
-                after_count = task.total_stocks  # Use the count from task
+                if scan_level == 'stage':
+                    # For stage level, need to check stock, subsector AND sector alignment
+                    from app.models import Sector
+                    query = query.join(SubSector, Instrument.sub_sector_id == SubSector.id).join(
+                        Sector, SubSector.sector_id == Sector.id
+                    ).filter(
+                        Instrument.current_stage.in_(selected_ids),
+                        SubSector.current_stage.in_(selected_ids),
+                        Sector.current_stage.in_(selected_ids)
+                    )
+                elif scan_level == 'sector':
+                    query = query.join(SubSector, Instrument.sub_sector_id == SubSector.id).filter(
+                        SubSector.sector_id.in_(selected_ids)
+                    )
+                    # Apply stock stage filter (default to stages 1,2 if not selected)
+                    stock_stages = criteria.get('selected_stages', [1, 2])
+                    query = query.filter(Instrument.current_stage.in_(stock_stages))
+                elif scan_level == 'subsector':
+                    query = query.filter(Instrument.sub_sector_id.in_(selected_ids))
+
+                after_count = query.count()
                 debug_info['filters_applied'].append({
                     'name': f'{scan_level.title()} Level Filter',
                     'enabled': True,
@@ -792,13 +835,24 @@ def debug_task_results(task_id):
         if enable_ma_filter:
             sma = criteria.get('selected_sma', [])
             ema = criteria.get('selected_ema', [])
+
+            # Count stocks before MA filter (current query count)
+            before_ma_count = query.count()
+
+            # MA filter is applied in _get_stocks_to_scan() by checking historical data
+            # We can't easily replicate that in SQL, so use task.total_stocks as after count
+            after_ma_count = task.total_stocks
+
             debug_info['filters_applied'].append({
                 'name': 'Moving Average Filter',
                 'enabled': True,
                 'criteria': f"SMA: {sma}, EMA: {ema}",
-                'passed': task.matched_stocks,
-                'failed': task.total_stocks - task.matched_stocks
+                'passed': after_ma_count,
+                'failed': before_ma_count - after_ma_count
             })
+
+            # Update query to reflect MA filtering (though we can't actually query it)
+            # The actual filtering happens in scanner_service by checking candlestick data
 
         # Price Action Filter
         enable_price_action = criteria.get('enable_price_action_filter', False)

@@ -69,6 +69,20 @@
             <!-- Search and Filter Controls -->
             <div class="card shadow-sm mb-4">
                 <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="showMatchedOnly" checked>
+                                <label class="form-check-label fw-bold" for="showMatchedOnly">
+                                    <i class="bi bi-funnel me-2"></i>Show Matched Stocks Only
+                                    <span class="badge bg-success ms-2" id="matchedCount">{{ task.matched_stocks }}</span>
+                                    <span class="text-muted ms-2" style="font-weight: normal; font-size: 0.9em;">
+                                        (Toggle to view all {{ task.scanned_stocks }} scanned stocks)
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
                     <div class="row">
                         <div class="col-md-4">
                             <div class="input-group">
@@ -175,6 +189,7 @@
     let currentSortBy = 'scan_rank';
     let currentOrder = 'asc';
     let currentPerPage = 50;
+    let showMatchedOnly = true;
     let searchTimeout = null;
 
     // Load results on page load
@@ -208,11 +223,17 @@
             currentPage = 1;
             loadResults();
         });
+
+        document.getElementById('showMatchedOnly').addEventListener('change', function() {
+            showMatchedOnly = this.checked;
+            currentPage = 1;
+            loadResults();
+        });
     });
 
     async function loadResults() {
         const taskId = {{ task.id }};
-        const url = `/scanner/api/results/${taskId}?page=${currentPage}&per_page=${currentPerPage}&search=${encodeURIComponent(currentSearch)}&sort_by=${currentSortBy}&order=${currentOrder}`;
+        const url = `/scanner/api/results/${taskId}?page=${currentPage}&per_page=${currentPerPage}&search=${encodeURIComponent(currentSearch)}&sort_by=${currentSortBy}&order=${currentOrder}&matched_only=${showMatchedOnly}`;
 
         try {
             // Show loading
