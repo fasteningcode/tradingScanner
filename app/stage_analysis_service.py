@@ -253,19 +253,24 @@ class StageAnalyzer:
                         self.task.current_symbol = sector.index_symbol
                         db.session.commit()
 
-                        stage_result = self._calculate_stage(sector.index_symbol)
+                        # Calculate stages for all missing dates
+                        stage_results = self._calculate_stages_for_missing_dates(sector.index_symbol)
 
-                        if stage_result:
-                            sector.current_stage = stage_result['stage']
-                            sector.stage_confidence = stage_result['confidence']
+                        if stage_results:
+                            # Update sector with the most recent stage
+                            latest_result = stage_results[-1]
+                            sector.current_stage = latest_result['stage']
+                            sector.stage_confidence = latest_result['confidence']
                             sector.stage_updated_at = datetime.utcnow()
                             db.session.add(sector)  # Explicitly add to session to track changes
 
-                            # Save to history
-                            self._save_stage_history(sector.index_symbol, stage_result)
+                            # Save all stages to history
+                            for stage_result in stage_results:
+                                self._save_stage_history(sector.index_symbol, stage_result)
 
                             current_app.logger.info(
-                                f"Stage analysis task {self.task_id}: {sector.index_symbol} = Stage {stage_result['stage']}"
+                                f"Stage analysis task {self.task_id}: {sector.index_symbol} = "
+                                f"{len(stage_results)} dates calculated, latest Stage {latest_result['stage']}"
                             )
                         else:
                             current_app.logger.warning(
@@ -292,19 +297,24 @@ class StageAnalyzer:
                         self.task.current_symbol = subsector.index_symbol
                         db.session.commit()
 
-                        stage_result = self._calculate_stage(subsector.index_symbol)
+                        # Calculate stages for all missing dates
+                        stage_results = self._calculate_stages_for_missing_dates(subsector.index_symbol)
 
-                        if stage_result:
-                            subsector.current_stage = stage_result['stage']
-                            subsector.stage_confidence = stage_result['confidence']
+                        if stage_results:
+                            # Update subsector with the most recent stage
+                            latest_result = stage_results[-1]
+                            subsector.current_stage = latest_result['stage']
+                            subsector.stage_confidence = latest_result['confidence']
                             subsector.stage_updated_at = datetime.utcnow()
                             db.session.add(subsector)  # Explicitly add to session to track changes
 
-                            # Save to history
-                            self._save_stage_history(subsector.index_symbol, stage_result)
+                            # Save all stages to history
+                            for stage_result in stage_results:
+                                self._save_stage_history(subsector.index_symbol, stage_result)
 
                             current_app.logger.info(
-                                f"Stage analysis task {self.task_id}: {subsector.index_symbol} = Stage {stage_result['stage']}"
+                                f"Stage analysis task {self.task_id}: {subsector.index_symbol} = "
+                                f"{len(stage_results)} dates calculated, latest Stage {latest_result['stage']}"
                             )
                         else:
                             current_app.logger.warning(
@@ -343,6 +353,79 @@ class StageAnalyzer:
                 # Remove from active analyses
                 if self.task_id in active_analyses:
                     del active_analyses[self.task_id]
+
+    def _calculate_stages_for_missing_dates(self, index_symbol: str) -> list:
+        """
+        Calculate stages for recent missing dates by finding gaps in historical data
+        Only looks back 60 days to avoid trying to calculate for dates with insufficient data
+
+        Args:
+            index_symbol: The index symbol to analyze
+
+        Returns:
+            List of stage result dictionaries for each missing date, or empty list if error
+        """
+        try:
+            # Only look for missing dates in the last 60 days (trading holidays + recent gaps)
+            lookback_date = date.today() - timedelta(days=60)
+
+            # Get recent dates that have index history data
+            all_index_dates = db.session.query(IndexHistory.date).filter(
+                IndexHistory.index_symbol == index_symbol,
+                IndexHistory.date >= lookback_date
+            ).distinct().order_by(IndexHistory.date).all()
+
+            if not all_index_dates:
+                current_app.logger.warning(f"No recent index history found for {index_symbol}")
+                return []
+
+            all_index_dates = [d[0] for d in all_index_dates]  # Extract dates from tuples
+
+            # Get dates that already have stage analysis (from same period)
+            calculated_dates = db.session.query(StageAnalysisHistory.date).filter(
+                StageAnalysisHistory.index_symbol == index_symbol,
+                StageAnalysisHistory.date >= lookback_date
+            ).distinct().all()
+            calculated_dates_set = {d[0] for d in calculated_dates}  # Convert to set for fast lookup
+
+            # Find missing dates (dates in index_history but not in stage_analysis_history)
+            missing_dates = [d for d in all_index_dates if d not in calculated_dates_set]
+
+            if not missing_dates:
+                last_calculated_query = db.session.query(StageAnalysisHistory.date).filter(
+                    StageAnalysisHistory.index_symbol == index_symbol
+                ).order_by(StageAnalysisHistory.date.desc()).first()
+                last_calculated = last_calculated_query[0] if last_calculated_query else None
+                current_app.logger.info(
+                    f"No new dates to calculate for {index_symbol}. "
+                    f"Last calculated: {last_calculated if last_calculated else 'Never'}"
+                )
+                return []
+
+            current_app.logger.info(
+                f"Found {len(missing_dates)} missing dates for {index_symbol} in last 60 days: "
+                f"{missing_dates[:5]}..." if len(missing_dates) > 5 else
+                f"Found {len(missing_dates)} missing dates for {index_symbol}: {missing_dates}"
+            )
+
+            # Calculate stage for each missing date
+            stage_results = []
+            for date_to_calculate in missing_dates:
+                stage_result = self._calculate_stage(index_symbol, date_to_calculate)
+                if stage_result:
+                    stage_results.append(stage_result)
+                else:
+                    current_app.logger.warning(
+                        f"Could not calculate stage for {index_symbol} on {date_to_calculate}"
+                    )
+
+            return stage_results
+
+        except Exception as e:
+            current_app.logger.error(
+                f"Error calculating stages for missing dates for {index_symbol}: {str(e)}"
+            )
+            return []
 
     def _calculate_stage(self, index_symbol: str, analysis_date: Optional[date] = None) -> Optional[Dict]:
         """
