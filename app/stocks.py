@@ -20,6 +20,8 @@ def index():
     search = request.args.get('search', '', type=str)
     sector_id = request.args.get('sector_id', '', type=str)
     sub_sector_id = request.args.get('sub_sector_id', '', type=str)
+    sort_by = request.args.get('sort_by', 'symbol', type=str)
+    sort_order = request.args.get('sort_order', 'asc', type=str)
 
     # Base query - only NIFTY 500 stocks (NSE, EQ type)
     query = Instrument.query.filter_by(
@@ -53,8 +55,23 @@ def index():
         except (ValueError, TypeError):
             pass  # Invalid sector_id, ignore filter
 
-    # Order by trading symbol
-    query = query.order_by(Instrument.tradingsymbol)
+    # Apply sorting
+    if sort_by == 'rs_sub':
+        if sort_order == 'desc':
+            query = query.order_by(Instrument.rs_vs_subsector.desc().nullslast())
+        else:
+            query = query.order_by(Instrument.rs_vs_subsector.asc().nullslast())
+    elif sort_by == 'rs_sec':
+        if sort_order == 'desc':
+            query = query.order_by(Instrument.rs_vs_sector.desc().nullslast())
+        else:
+            query = query.order_by(Instrument.rs_vs_sector.asc().nullslast())
+    else:
+        # Default sorting by trading symbol
+        if sort_order == 'desc':
+            query = query.order_by(Instrument.tradingsymbol.desc())
+        else:
+            query = query.order_by(Instrument.tradingsymbol)
 
     # Paginate results
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
@@ -92,7 +109,9 @@ def index():
                          selected_sector_id=sector_id,
                          selected_sub_sector_id=sub_sector_id,
                          total_nifty500=total_nifty500,
-                         price_data=price_data)
+                         price_data=price_data,
+                         sort_by=sort_by,
+                         sort_order=sort_order)
 
 
 @stocks_bp.route('/<symbol>')
